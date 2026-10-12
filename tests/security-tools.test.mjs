@@ -225,3 +225,11 @@ test('a changed fingerprint after claim is corruption, never permission to execu
  await assert.rejects(r.instance.accept(e),error=>error.code==='invalid_tool_state');
  assert.equal(effects,0);assert.equal(mutations,0);assert.equal(r.submissions.length,0);
 });
+
+test('a missing claim after the signed handler finishes blocks output submission',async()=>{
+ const records=new Map();let effects=0,transitions=0;
+ const store={get:async key=>structuredClone(records.get(key)),claim:async(key,value)=>{if(records.has(key))return false;records.set(key,structuredClone(value));return true;},transition:async(key,expected,patch)=>{transitions++;const current=records.get(key);if(!current||!expected.includes(current.state))return false;records.set(key,{...current,...patch});return true;}};
+ const r=runner({store,registry:registry((_,context)=>{effects++;assert.equal(records.get(context.idempotencyKey).state,'claimed');records.delete(context.idempotencyKey);return 'local effect completed but claim is gone';})});
+ await r.instance.accept(signed());await r.instance.drain();
+ assert.equal(effects,1);assert.equal(transitions,1);assert.equal(records.size,0);assert.equal(r.submissions.length,0);
+});

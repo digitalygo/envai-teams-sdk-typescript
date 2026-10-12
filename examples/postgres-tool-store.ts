@@ -22,6 +22,7 @@ export class PostgresToolStateStore implements ToolStateStore {
   async get(key: string): Promise<ToolRecord | undefined> {
     const result = await this.db.query<{ record: unknown }>('SELECT record FROM envai_tool_state WHERE key = $1', [key]);
     if (result.rows.length === 0) return undefined;
+    if (result.rows.length !== 1) throw new ToolExecutionError('Duplicate tool state keys; restore the primary-key constraint before retrying', 'invalid_tool_state');
     const value = result.rows[0]!.record;
     assertToolRecord(key, value);
     return value;

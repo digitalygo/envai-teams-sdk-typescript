@@ -52,3 +52,11 @@ test('Postgres adapter handles concurrent claim and compare-and-swap races witho
  const corrupt=database();corrupt.beforeWrite=()=>{corrupt.rows.set(key,null);corrupt.beforeWrite=undefined;};
  await assert.rejects(new PostgresToolStateStore(corrupt).claim(key,good),error=>error.code==='invalid_tool_state');assert.equal(corrupt.rows.get(key),null);
 });
+
+test('Postgres adapter rejects duplicate rows before any mutation if a restored table lost its constraint',async()=>{
+ let writes=0;const copies=[structuredClone(good),structuredClone(good)];
+ const db={async query(sql){if(sql.startsWith('SELECT'))return {rows:copies.map(record=>({record})),rowCount:2};writes++;return {rows:[],rowCount:2};}};
+ const store=new PostgresToolStateStore(db);
+ for(const action of [()=>store.get(key),()=>store.claim(key,good),()=>store.transition(key,['claimed'],{state:'resolved'})])await assert.rejects(action,error=>error.code==='invalid_tool_state');
+ assert.equal(writes,0);assert.deepEqual(copies,[good,good]);
+});
