@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto';
-import { Ajv2020, type ValidateFunction } from 'ajv/dist/2020.js';
+import { Ajv, type ValidateFunction } from 'ajv';
+import { Ajv2019 } from 'ajv/dist/2019.js';
+import { Ajv2020 } from 'ajv/dist/2020.js';
+import draft6 from 'ajv/dist/refs/json-schema-draft-06.json' with { type: 'json' };
 import addFormats from 'ajv-formats';
 import { ToolExecutionError } from './errors.js';
 import { parseEvent, isEvent, isTerminal } from './events.js';
@@ -18,14 +21,22 @@ interface RegisteredTool { definition: LocalTool; validate: ValidateFunction; ti
 export class ClientToolRegistry {
   readonly #tools = new Map<string, RegisteredTool>();
   readonly #ajv = new Ajv2020({ strict: false, allErrors: true });
-  constructor() { (addFormats as unknown as (a: Ajv2020) => void)(this.#ajv); }
+  readonly #legacy = new Ajv({ strict: false, allErrors: true });
+  readonly #draft2019 = new Ajv2019({ strict: false, allErrors: true });
+  constructor() {
+    this.#legacy.addMetaSchema(draft6);
+    for (const validator of [this.#ajv, this.#legacy, this.#draft2019]) (addFormats as unknown as (a: Ajv) => void)(validator);
+  }
   register<T = Record<string, unknown>>(definition: LocalTool<T>): this {
     if (!/^[a-z][a-z0-9_]{0,254}$/.test(definition.name) || this.#tools.has(definition.name)) throw new TypeError('Invalid or duplicate local tool name');
     if (definition.parameters.type !== 'object') throw new TypeError('Local tool schema root must be object');
     const seconds = definition.timeoutSeconds ?? 120;
     if (!Number.isInteger(seconds) || seconds < 1 || seconds > 600) throw new RangeError('timeoutSeconds must be 1..600');
     const copy = { ...definition, parameters: structuredClone(definition.parameters) } as unknown as LocalTool;
-    this.#tools.set(copy.name, { definition: copy, validate: this.#ajv.compile(copy.parameters), timeoutMs: seconds * 900 });
+    const dialect = typeof copy.parameters.$schema === 'string' ? copy.parameters.$schema.replace(/#$/, '') : copy.parameters.$schema;
+    const validator = typeof dialect === 'string' && /^http:\/\/json-schema.org\/draft-0[67]\/schema#?$/.test(dialect) ? this.#legacy
+      : dialect === 'https://json-schema.org/draft/2019-09/schema' ? this.#draft2019 : this.#ajv;
+    this.#tools.set(copy.name, { definition: copy, validate: validator.compile(copy.parameters), timeoutMs: seconds * 900 });
     return this;
   }
   get(name: string): RegisteredTool | undefined { return this.#tools.get(name); }
@@ -39,8 +50,35 @@ export interface ToolRecord {
   state: ToolState; fingerprint: string; chatId: string; turnId: string; callId: string;
   output?: string; isError?: boolean;
 }
+/** Validate persisted JSON before treating it as an execution barrier or changing it.
+ * Keys are the opaque values returned by ClientToolRunner.key (or its turn barriers).
+ * Corruption is a local storage failure, never permission to reclaim a call.
+ */
+export function assertToolRecord(key: string, value: unknown, turnId?: string): asserts value is ToolRecord {
+  const fail = (): never => { throw new ToolExecutionError('Invalid persisted tool state; reconcile storage before retrying', 'invalid_tool_state'); };
+  let identity: unknown;
+  try { identity = JSON.parse(key); } catch { fail(); }
+  if (!Array.isArray(identity) || ![3, 4].includes(identity.length) || identity.some(v => typeof v !== 'string' || !v)) fail();
+  const parts = identity as string[];
+  const barrier = parts.length === 4;
+  if (barrier && parts[2] !== 'turn') fail();
+  const ulid = '[0-7][0-9a-hjkmnp-tv-zA-HJKMNP-TV-Z]{25}';
+  if (!new RegExp('^cht_' + ulid + '$').test(parts[1]!) || (!barrier && !new RegExp('^tc_' + ulid + '$').test(parts[2]!))) fail();
+  if (!value || typeof value !== 'object' || Array.isArray(value)) fail();
+  const record = value as Record<string, unknown>;
+  const states: readonly unknown[] = ['claimed', 'completed', 'submitted', 'ambiguous', 'resolved', 'abandoned'];
+  if (!['state', 'fingerprint', 'chatId', 'turnId', 'callId'].every(k => Object.hasOwn(record, k)) || !states.includes(record.state)) fail();
+  if (record.chatId !== parts[1] || typeof record.turnId !== 'string' || !new RegExp('^cmpl_' + ulid + '$').test(record.turnId) || (turnId !== undefined && record.turnId !== turnId)) fail();
+  if (record.callId !== (barrier ? '' : parts[2]) || (barrier && record.turnId !== parts[3])) fail();
+  if (typeof record.fingerprint !== 'string' || (!/^[a-f0-9]{64}$/.test(record.fingerprint) && !(record.fingerprint === '' && (barrier || record.state === 'resolved')))) fail();
+  const hasOutput = Object.hasOwn(record, 'output'), hasError = Object.hasOwn(record, 'isError');
+  if (hasOutput !== hasError || (hasOutput && (typeof record.output !== 'string' || !record.output || Buffer.byteLength(record.output, 'utf8') > 131_072 || typeof record.isError !== 'boolean'))) fail();
+  if (['completed', 'submitted', 'ambiguous'].includes(record.state as string) && !hasOutput) fail();
+  if ((record.state === 'claimed' && hasOutput) || (barrier && (record.state !== 'abandoned' || record.fingerprint !== '' || hasOutput))) fail();
+}
 /** Implement both mutations atomically and durably before resolving, across all runner processes.
- * Never automatically expire or steal a claim: a prior local side effect may already have happened.
+ * get returns undefined ONLY for an absent key; reject null, invalid JSON, shape, state or identity.
+ * Never overwrite corrupt entries, automatically expire, or steal claims: effects may have happened.
  */
 export interface ToolStateStore {
   claim(key: string, initial: ToolRecord): Promise<boolean>;
@@ -50,11 +88,21 @@ export interface ToolStateStore {
 /** Explicitly non-durable. Appropriate for tests or a single process where replay-after-crash is not allowed. */
 export class MemoryToolStateStore implements ToolStateStore {
   readonly #records = new Map<string, ToolRecord>();
-  async claim(key: string, initial: ToolRecord): Promise<boolean> { if (this.#records.has(key)) return false; this.#records.set(key, structuredClone(initial)); return true; }
-  async get(key: string): Promise<ToolRecord | undefined> { const v = this.#records.get(key); return v && structuredClone(v); }
+  async claim(key: string, initial: ToolRecord): Promise<boolean> {
+    if (this.#records.has(key)) { assertToolRecord(key, this.#records.get(key)); return false; }
+    assertToolRecord(key, initial); this.#records.set(key, structuredClone(initial)); return true;
+  }
+  async get(key: string): Promise<ToolRecord | undefined> {
+    if (!this.#records.has(key)) return undefined;
+    const value = this.#records.get(key); assertToolRecord(key, value); return structuredClone(value);
+  }
   async transition(key: string, expected: readonly ToolState[], patch: Partial<ToolRecord>): Promise<boolean> {
-    const v = this.#records.get(key); if (!v || !expected.includes(v.state)) return false;
-    this.#records.set(key, structuredClone({ ...v, ...patch })); return true;
+    if (!this.#records.has(key)) return false;
+    const value = this.#records.get(key); assertToolRecord(key, value);
+    if (!expected.includes(value.state)) return false;
+    const next = { ...value, ...patch }; assertToolRecord(key, next, value.turnId);
+    if (next.fingerprint !== value.fingerprint) throw new ToolExecutionError('Cannot change tool call identity', 'invalid_tool_state');
+    this.#records.set(key, structuredClone(next)); return true;
   }
 }
 export interface ToolRunnerOptions {
@@ -63,7 +111,7 @@ export interface ToolRunnerOptions {
   submit: (chatId: string, body: { call_id: string; output: string; is_error: boolean }, options: RequestOptions) => Promise<void>;
   concurrency?: number; maxPending?: number; signal?: AbortSignal; onObservation?: (event: Observation) => void;
 }
-interface Job { key: string; event: KnownEvent<'agent.tool.request'>; controller: AbortController; admitted: number; }
+interface Job { key: string; fingerprint: string; event: KnownEvent<'agent.tool.request'>; controller: AbortController; admitted: number; }
 function controlled(code: string): { output: string; isError: true } { return { output: JSON.stringify({ code, message: `Client tool failed: ${code}` }), isError: true }; }
 function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   signal.throwIfAborted();
@@ -87,11 +135,19 @@ export class ClientToolRunner {
   }
   key(chatId: string, callId: string): string { return JSON.stringify([this.#options.scope, chatId, callId]); }
   private turnKey(chatId: string, turnId: string): string { return JSON.stringify([this.#options.scope, chatId, 'turn', turnId]); }
+  private async stored(key: string, turnId: string, fingerprint?: string): Promise<ToolRecord | undefined> {
+    const value = await this.#options.store.get(key);
+    if (value !== undefined) {
+      assertToolRecord(key, value, turnId);
+      if (fingerprint !== undefined && value.fingerprint && value.fingerprint !== fingerprint) throw new ToolExecutionError('Persisted tool fingerprint changed', 'invalid_tool_state');
+    }
+    return value;
+  }
   private async ended(event: ATPEvent): Promise<boolean> {
     if (!event.turn_id) return false;
     const key = this.turnKey(event.chat_id, event.turn_id);
     if (this.#endingTurns.has(key)) return true;
-    return !!await this.#options.store.get(key) || this.#endingTurns.has(key);
+    return (await this.stored(key, event.turn_id)) !== undefined || this.#endingTurns.has(key);
   }
   private observe(event: Observation): void { try { this.#options.onObservation?.(event); } catch {} }
   /** Admit verified requests without awaiting handler completion, so result/terminal events remain observable. */
@@ -103,6 +159,7 @@ export class ClientToolRunner {
       const key = this.key(event.chat_id, event.data.call_id);
       this.#resolvingCalls.add(key);
       this.#jobs.get(key)?.controller.abort(new DOMException('Server resolved tool', 'AbortError'));
+      await this.stored(key, event.turn_id!);
       await this.#options.store.claim(key, { state: 'resolved', fingerprint: '', chatId: event.chat_id, turnId: event.turn_id!, callId: event.data.call_id });
       await this.#options.store.transition(key, ['claimed','completed','submitted','ambiguous','abandoned'], { state: 'resolved' });
       this.#resolvingCalls.delete(key);
@@ -114,6 +171,7 @@ export class ClientToolRunner {
       const endingJobs = [...this.#jobs.values()].filter(j => j.event.chat_id === event.chat_id && j.event.turn_id === event.turn_id);
       for (const job of endingJobs) job.controller.abort(new DOMException('Turn ended', 'AbortError'));
       // Persist a turn admission barrier even if no request has arrived yet.
+      await this.stored(turnKey, event.turn_id!);
       await this.#options.store.claim(turnKey, { state: 'abandoned', fingerprint: '', chatId: event.chat_id, turnId: event.turn_id!, callId: '' });
       await Promise.all(endingJobs.map(async job => {
         await this.#options.store.transition(job.key, ['claimed','completed','submitted'], { state: 'abandoned' });
@@ -127,9 +185,9 @@ export class ClientToolRunner {
     const key = this.key(event.chat_id, event.data.call_id);
     const fingerprint = createHash('sha256').update(event.data.call_id + '\n' + event.data.tool_name + '\n' + canonicalize(event.data.args)).digest('hex');
     if (this.#resolvingCalls.has(key) || await this.ended(event)) return;
-    const existing = await this.#options.store.get(key);
+    const existing = await this.stored(key, event.turn_id!);
     if (this.#resolvingCalls.has(key)) return;
-    if (existing) { if (existing.fingerprint && existing.fingerprint !== fingerprint) throw new ToolExecutionError('Call ID reused with different arguments', 'call_id_conflict'); return; }
+    if (existing !== undefined) { if (existing.fingerprint && existing.fingerprint !== fingerprint) throw new ToolExecutionError('Call ID reused with different arguments', 'call_id_conflict'); return; }
     if (this.#jobs.size + this.#admitting >= this.#maxPending) throw new ToolExecutionError('Client tool queue is full', 'queue_full');
     const record: ToolRecord = { state: 'claimed', fingerprint, chatId: event.chat_id, turnId: event.turn_id!, callId: event.data.call_id };
     this.#admitting++;
@@ -139,9 +197,9 @@ export class ClientToolRunner {
     if (this.#resolvingCalls.has(key) || await this.ended(event)) {
       await this.#options.store.transition(key, ['claimed'], { state: 'abandoned' }); return;
     }
-    const current = await this.#options.store.get(key);
+    const current = await this.stored(key, event.turn_id!, fingerprint);
     if (current?.state !== 'claimed' || this.#resolvingCalls.has(key)) return;
-    const job: Job = { key, event, controller: new AbortController(), admitted };
+    const job: Job = { key, fingerprint, event, controller: new AbortController(), admitted };
     this.#jobs.set(key, job); this.#queue.push(job); this.pump();
   }
   private pump(): void {
@@ -160,7 +218,7 @@ export class ClientToolRunner {
     this.observe({ kind: 'tool.start', chatId: event.chat_id, turnId: event.turn_id, callId: event.data.call_id });
     try {
       signal.throwIfAborted();
-      if (await this.ended(event) || (await this.#options.store.get(key))?.state !== 'claimed') {
+      if (await this.ended(event) || (await this.stored(key, event.turn_id!, job.fingerprint))?.state !== 'claimed') {
         await this.#options.store.transition(key, ['claimed'], { state: 'abandoned' }); return;
       }
       signal.throwIfAborted();

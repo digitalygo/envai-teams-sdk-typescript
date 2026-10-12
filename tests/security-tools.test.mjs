@@ -117,7 +117,7 @@ test('registry validation, immutable registration schemas, store clone isolation
  const schema={type:'object'};const reg=registry(()=>{},schema);schema.type='string';assert.equal(reg.definitions()[0].parameters.type,'object');assert.equal(reg.definitions()[0].timeout_seconds,120);
  assert.throws(()=>reg.register({name:'fixture_echo',parameters:{type:'object'},handler(){}}));assert.throws(()=>registry(()=>{},{type:'array'}));assert.throws(()=>registry(()=>{},{type:'object'},601));
  assert.throws(()=>runner({scope:''}));assert.throws(()=>runner({concurrency:1.2}));assert.throws(()=>runner({maxPending:0}));
- const s=new MemoryToolStateStore();assert.equal(await s.transition('x',['claimed'],{state:'resolved'}),false);assert.equal(await s.get('x'),undefined);await s.claim('x',{state:'claimed'});const r=await s.get('x');r.state='resolved';assert.equal((await s.get('x')).state,'claimed');
+ const s=new MemoryToolStateStore();assert.equal(await s.transition('x',['claimed'],{state:'resolved'}),false);assert.equal(await s.get('x'),undefined);const callId=signed().data.call_id;const key=JSON.stringify(['scope',chatId,callId]);await s.claim(key,{state:'claimed',fingerprint:'a'.repeat(64),chatId,turnId,callId});const r=await s.get(key);r.state='resolved';assert.equal((await s.get(key)).state,'claimed');
 });
 test('runner close and drain cancellation propagate; run consumes control events',async()=>{
  const {instance}=runner();await instance.run((async function*(){yield event('ping',0);yield signed();})());await assert.rejects(instance.accept(signed()),e=>e.name==='AbortError');
@@ -148,4 +148,80 @@ test('terminal arriving while durable claim commits prevents execution',async()=
  const memory=new MemoryToolStateStore();let release;let effects=0;
  const store={get:(...a)=>memory.get(...a),transition:(...a)=>memory.transition(...a),claim:async(key,record)=>{const value=await memory.claim(key,record);if(record.state==='claimed')await new Promise(r=>release=r);return value;}};
  const r=runner({store,registry:registry(()=>{effects++;return 'bad';})});const e=signed();const p=r.instance.accept(e);await tick();await r.instance.accept(event('turn.completed'));release();await p;await r.instance.drain();assert.equal(effects,0);assert.equal((await store.get(r.instance.key(chatId,e.data.call_id))).state,'abandoned');
+});
+
+// These are SDK-authored conformance cases, not fixtures emitted by the pinned server.
+for (const item of JSON.parse((await import('node:fs')).readFileSync(new URL('../testdata/tool-schema-matrix.json', import.meta.url), 'utf8'))) {
+ for (const kind of ['good', 'bad']) test(`signed tool schema matrix: ${item.name} / ${kind}`, async () => {
+  let effects = 0;
+  const r = runner({registry: registry(args => { effects++; assert.deepEqual(args, item.good); return 'ok'; }, item.schema)});
+  await r.instance.accept(signed(item[kind])); await r.instance.drain();
+  assert.equal(effects, kind === 'good' ? 1 : 0);
+  assert.equal(r.submissions.length, 1);
+  assert.equal(r.submissions[0].body.is_error, kind === 'bad');
+  if (kind === 'bad') assert.equal(JSON.parse(r.submissions[0].body.output).code, 'invalid_arguments');
+ });
+}
+test('schema dialect defaults to 2020-12; explicit unsupported dialects fail registration', async () => {
+ for (const dialect of ['https://json-schema.org/draft/2020-12/schema', 'https://json-schema.org/draft/2019-09/schema','https://json-schema.org/draft/2019-09/schema#']) {
+  const r = runner({registry: registry(() => 'ok', {$schema:dialect,type:'object',dependentRequired:{a:['b']}})});
+  await r.instance.accept(signed({a:1})); await r.instance.drain();
+  assert.equal(JSON.parse(r.submissions[0].body.output).code,'invalid_arguments');
+ }
+ for (const dialect of ['http://json-schema.org/draft-04/schema#', 'https://example.test/unknown-schema', 7]) {
+  assert.throws(() => registry(() => 'never', {$schema:dialect,type:'object'}));
+ }
+});
+
+const corruptRecords = good => [null, false, 0, '', [], {}, {...good,state:'unknown'}, {...good,state:3},
+ {...good,chatId:'wrong-chat'}, {...good,turnId:'wrong-turn'}, {...good,callId:'wrong-call'},
+ {...good,fingerprint:'invalid'}, {...good,fingerprint:''}, {...good,output:'x'}, {...good,isError:false},
+ {...good,state:'completed'}, {...good,state:'submitted',output:'',isError:false},
+ {...good,state:'ambiguous',output:'x',isError:'false'}, {...good,state:'resolved',output:[],isError:false},
+ {...good,state:'completed',output:'x'.repeat(131073),isError:false}];
+const validRecord = e => ({state:'claimed',fingerprint:'a'.repeat(64),chatId:e.chat_id,turnId:e.turn_id,callId:e.data.call_id});
+test('corrupt call or turn records fail closed before claim, mutation, handler, or submission',async()=>{
+ for (const barrier of [false,true]) { const e=signed(); for (const value of corruptRecords(validRecord(e))) {
+  let effects=0,claims=0,mutations=0;
+  const target=JSON.stringify(barrier?['deployment:test/account:1',e.chat_id,'turn',e.turn_id]:['deployment:test/account:1',e.chat_id,e.data.call_id]);
+  const store={get:async key=>key===target?structuredClone(value):undefined,claim:async()=>{claims++;return true;},transition:async()=>{mutations++;return true;}};
+  const r=runner({store,registry:registry(()=>{effects++;return 'bad';})});
+  await assert.rejects(r.instance.accept(e),error=>error.code==='invalid_tool_state');await r.instance.drain();
+  assert.equal(effects,0);assert.equal(claims,0);assert.equal(mutations,0);assert.equal(r.submissions.length,0);
+ }}
+});
+test('corruption after an atomic claim is detected without execution or overwrite',async()=>{
+ const e=signed();let reads=0,effects=0,mutations=0;
+ const store={get:async key=>key.includes('"turn"')?undefined:(++reads===1?undefined:null),claim:async()=>true,transition:async()=>{mutations++;return true;}};
+ const r=runner({store,registry:registry(()=>{effects++;return 'bad';})});
+ await assert.rejects(r.instance.accept(e),error=>error.code==='invalid_tool_state');
+ assert.equal(effects,0);assert.equal(mutations,0);assert.equal(r.submissions.length,0);
+});
+test('server resolution and terminal barriers do not overwrite corrupt existing records',async()=>{
+ for(const type of ['agent.tool.result','turn.completed']){
+  let writes=0;const r=runner({store:{get:async()=>null,claim:async()=>{writes++;return true;},transition:async()=>{writes++;return true;}}});
+  await assert.rejects(r.instance.accept(event(type)),error=>error.code==='invalid_tool_state');assert.equal(writes,0);
+ }
+});
+test('memory store validates runtime values, immutable identities, and valid tombstones',async()=>{
+ const {assertToolRecord}=await import('../dist/index.js');const e=signed();const good=validRecord(e);const key=JSON.stringify(['scope',e.chat_id,e.data.call_id]);
+ for(const value of corruptRecords(good)){
+  const store=new MemoryToolStateStore();await assert.rejects(store.claim(key,value),error=>error.code==='invalid_tool_state');assert.equal(await store.get(key),undefined);
+ }
+ for(const key of [JSON.stringify(['scope','bad',e.data.call_id]),JSON.stringify(['scope',e.chat_id,'bad']),'invalid','{}','[]','["s","c"]','["","c","k"]','["s","c","bad","t"]'])assert.throws(()=>assertToolRecord(key,good),error=>error.code==='invalid_tool_state');
+ const store=new MemoryToolStateStore();await store.claim(key,good);assert.equal(await store.claim(key,good),false);
+ for(const patch of [{turnId:'other'},{fingerprint:'b'.repeat(64)},{callId:'other'},{state:'unknown'}])await assert.rejects(store.transition(key,['claimed'],patch),error=>error.code==='invalid_tool_state');
+ assert.deepEqual(await store.get(key),good);assert.equal(await store.transition(key,['submitted'],{state:'resolved'}),false);
+ assert.equal(await store.transition(key,['claimed'],{state:'resolved'}),true);
+ const barrier=JSON.stringify(['scope',e.chat_id,'turn',e.turn_id]);
+ await store.claim(barrier,{state:'abandoned',fingerprint:'',chatId:e.chat_id,turnId:e.turn_id,callId:''});
+ await assert.rejects(store.transition(barrier,['abandoned'],{state:'resolved'}),error=>error.code==='invalid_tool_state');
+});
+
+test('a changed fingerprint after claim is corruption, never permission to execute',async()=>{
+ const e=signed();let reads=0,effects=0,mutations=0;
+ const store={get:async key=>JSON.parse(key).length===4?undefined:(++reads===1?undefined:validRecord(e)),claim:async()=>true,transition:async()=>{mutations++;return true;}};
+ const r=runner({store,registry:registry(()=>{effects++;return 'bad';})});
+ await assert.rejects(r.instance.accept(e),error=>error.code==='invalid_tool_state');
+ assert.equal(effects,0);assert.equal(mutations,0);assert.equal(r.submissions.length,0);
 });

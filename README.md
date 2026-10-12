@@ -36,7 +36,7 @@ console.log(result.text, result.terminal.type, result.lastSeq);
 
 Provide your own credentials and existing team ID. The constructor reads no environment variables and makes no network calls. A base URL containing only an origin gets `/api/v1`; an explicit path is treated as the complete API prefix. Trailing slashes are removed. Use the edge URL for the combined API, not the execution-plane-only gateway on port 8081.
 
-See [typed quickstart](examples/quickstart.ts), [client tools](examples/client-tools.ts), and the [durable-store adapter example](examples/postgres-tool-store.ts). Examples are typechecked but never run by tests or CI.
+See [typed quickstart](examples/quickstart.ts), [client tools](examples/client-tools.ts), and the [durable-store adapter example](examples/postgres-tool-store.ts). Examples are typechecked. The PostgreSQL adapter is also exercised with an in-memory SQL test double; tests and CI never connect to a database.
 
 ## API and generated types
 
@@ -125,13 +125,15 @@ Before invoking a handler, the runner owns a deep event snapshot, validates the 
 
 Handlers receive an `AbortSignal` and a stable idempotency key. Concurrency defaults to four actual running handlers and pending admission to 64 calls. The local deadline is 90% of the declared tool timeout, including signature and queue delays, because the server's deadline started earlier. A non-cooperative timed-out handler retains its slot until it settles, so actual concurrency never silently exceeds the bound. JavaScript cannot forcibly undo or terminate an external side effect. Supply a signal to `drain` to bound waiting on non-cooperative handlers.
 
+Local tool schemas default to JSON Schema 2020-12. Explicit `$schema` declarations support drafts 6, 7, 2019-09 and 2020-12 using their standard meta-schema URIs; unsupported dialects fail registration. Each dialect uses the appropriate Ajv compiler, including draft-7 `dependencies`/tuple `items` and modern `dependentRequired`/`prefixItems`. Nested `const` and `enum` objects remain literal JSON values. Registration does no network I/O.
+
 Unknown tools, invalid arguments, handler errors, empty output, and oversized output generate controlled errors. Structured output is JSON-serialized once; the 128 KiB bound is measured in UTF-8 bytes. Empty string output is rejected by the current gateway despite the schema omitting `minLength`, so the runner converts it to `empty_output`.
 
 ### Durable state and reconciliation
 
 `ToolStateStore` is intentionally mandatory. For production side effects, implement atomic, durable `claim`, `get`, and conditional `transition` operations across all application processes. Use a stable, non-secret deployment/account `scope`. The [Postgres adapter example](examples/postgres-tool-store.ts) accepts a caller-owned database connection; table creation and credentials are never automatic.
 
-The state machine is `claimed → completed → submitted → resolved`, with `ambiguous` and `abandoned` branches. A matching server result creates a durable resolved tombstone even if its request was never seen. Terminal events create durable per-turn admission barriers, including when signature verification or storage operations are still in flight. Claims precede handler effects; all existing calls are skipped on replay. Store failures fail closed.
+The state machine is `claimed → completed → submitted → resolved`, with `ambiguous` and `abandoned` branches. A matching server result creates a durable resolved tombstone even if its request was never seen. Terminal events create durable per-turn admission barriers, including when signature verification or storage operations are still in flight. Claims precede handler effects; all existing calls are skipped on replay. Store failures fail closed. `get` must return `undefined` only for an absent key; malformed JSON, JSON `null`, invalid shapes/states, mismatched call/turn identities, and invalid saved output must raise an error without overwriting the stored record. The runner validates every record it reads and reports `invalid_tool_state` for corrupt values. Adapters must use `assertToolRecord` and atomically preserve valid identity during mutations. The PostgreSQL example validates the complete row and uses a compare-and-swap update, so a concurrent change cannot be overwritten. These checks address pre-existing local storage corruption, not a remotely exploitable storage-write path.
 
 Never expire, steal, delete, or re-execute a claim automatically. A crash between an external side effect and saving its result is inherently ambiguous. Reconcile using your own transactional/idempotent downstream operation. Persisted output may contain sensitive information: protect the store appropriately. The SDK never persists API keys, arguments, or signature material in the state store.
 
@@ -164,7 +166,7 @@ Advanced PHP definitions/CLI/synchronization parity is deliberately outside this
 
 ## Development and provenance
 
-`npm run generate` deterministically regenerates 86 HTTP models, request/response types, operation primitives, and 28 event payload types from both pinned contracts. SSE, cryptography, tools, and helpers remain handwritten. `npm run check:generated` fails on drift without rewriting files. The exact server source contracts and shared cross-language fixtures are preserved with hash provenance.
+`npm run generate` deterministically regenerates 86 HTTP models, request/response types, operation primitives, and 28 event payload types from both pinned contracts. SSE, cryptography, tools, and helpers remain handwritten. `npm run check:generated` fails on drift without rewriting files. The exact server source contracts and foundation document are preserved with hash provenance in `testdata/contracts/provenance.json`. `sources` identifies each pinned repository path, local snapshot, byte count, SHA-256 and Git blob SHA. `generated_fixtures` separately identifies SDK-authored conformance cases and the generated OpenAPI JSON; these are not presented as raw server files. Tests verify every source and derived-file hash, including the foundation snapshot, without exclusions.
 
 Tests make no live Envai requests and need no credentials. CI typechecks the runtime and examples, verifies generation, tests all 52 operations plus schema/SSE/signature/state-machine conformance, enforces at least 95% line/function and 90% branch coverage, and smoke-tests the packed archive on Node 22 and 24. Contract fixtures include public RFC 8032 test-key material only; no private key or credential is shipped.
 

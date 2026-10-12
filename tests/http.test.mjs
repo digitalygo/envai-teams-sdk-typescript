@@ -84,12 +84,27 @@ test('input validation and reserved headers',async()=>{
 test('observation callback failures cannot corrupt a request',async()=>{
  const c=new EnvaiClient({baseUrl,onObservation:()=>{throw Error('observer');},fetch:async()=>json({ok:1})});assert.equal((await c.getCapabilities()).ok,1);
 });
-test('vendored contracts and shared fixtures match immutable provenance hashes',async()=>{
+test('exact server source snapshots match SHA-256, Git blob SHA and byte length',async()=>{
  const {readFileSync}=await import('node:fs');const {createHash}=await import('node:crypto');const provenance=fixture('provenance.json');
- for(const [name,hash]of Object.entries(provenance.files)){
-  if(name==='envai-api-sdk-foundation.md')continue; // Linked upstream design document, not a vendored schema/fixture.
-  const folder=name==='openapi.yaml'||name==='events.json'?'contracts':'testdata/contracts';
-  assert.equal(createHash('sha256').update(readFileSync(new URL('../'+folder+'/'+name,import.meta.url))).digest('hex'),hash,name);
+ assert.equal(provenance.repository,'digitalygo/envai-teams');
+ assert.equal(provenance.commit,'55275860c9a950eaad8e39e9d2b728149084779c');
+ assert.equal(provenance.protocol_version,2);assert.equal(provenance.operations,52);
+ assert.deepEqual(Object.keys(provenance.sources).sort(),['envai-api-sdk-foundation.md','events.json','openapi.yaml']);
+ for(const [name,source]of Object.entries(provenance.sources)){
+  const data=readFileSync(new URL('../'+source.snapshot_path,import.meta.url));
+  assert.equal(data.length,source.bytes,name);
+  assert.equal(createHash('sha256').update(data).digest('hex'),source.sha256,name);
+  assert.equal(createHash('sha1').update(`blob ${data.length}\0`).update(data).digest('hex'),source.git_blob_sha,name);
+  assert.equal(source.repository_path,name==='envai-api-sdk-foundation.md'?'docs/'+name:'packages/contracts/'+name);
  }
+ assert.equal(provenance.sources['envai-api-sdk-foundation.md'].sha256,'090e58738a02578b04123ab2e45b6e30d839361c0c91ba9bc019c2f19781f3e2');
  assert.equal(readFileSync(new URL('../contracts/events.json',import.meta.url),'utf8'),readFileSync(new URL('../testdata/contracts/events.json',import.meta.url),'utf8'));
+});
+test('derived SDK fixtures are labelled separately and match their complete hashes',async()=>{
+ const {readFileSync}=await import('node:fs');const {createHash}=await import('node:crypto');const provenance=fixture('provenance.json');
+ assert.deepEqual(Object.keys(provenance.generated_fixtures).sort(),['events-invalid.json','events-valid.json','openapi.json','operations.json','signatures.json','sse-cases.json','tool-schema-matrix.json']);
+ for(const [name,derived]of Object.entries(provenance.generated_fixtures)){
+  assert.ok(derived.origin.length>0,name);assert.equal(derived.repository_path,undefined,name);
+  assert.equal(createHash('sha256').update(readFileSync(new URL('../'+derived.snapshot_path,import.meta.url))).digest('hex'),derived.sha256,name);
+ }
 });
