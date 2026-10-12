@@ -1,0 +1,11 @@
+{
+  "repository": "digitalygo/envai-teams",
+  "commit": "55275860c9a950eaad8e39e9d2b728149084779c",
+  "apiVersion": "2.0.0",
+  "atpVersion": 2,
+  "operationCount": 52,
+  "sha256": {
+    "openapi.yaml": "a68b1eb9cae0500c95104d97118d0d287b887969b9bc2b9dde62bb1e08a400b1",
+    "events.json": "f22869556e488f1e208addf258a25c502966746fcc8e2747c07856d30c28aee7"
+  }
+}

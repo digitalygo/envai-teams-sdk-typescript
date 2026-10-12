@@ -1,0 +1,211 @@
+import { createHash } from 'node:crypto';
+import { Ajv2020, type ValidateFunction } from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
+import { ToolExecutionError } from './errors.js';
+import { parseEvent, isEvent, isTerminal } from './events.js';
+import type { ATPEvent, KnownEvent } from './event-types.js';
+import { positive, type RequestOptions, type Observation } from './http.js';
+import { canonicalize, ToolRequestVerifier } from './security.js';
+
+export interface ToolContext { signal: AbortSignal; chatId: string; turnId: string; callId: string; idempotencyKey: string; }
+export interface LocalTool<T = Record<string, unknown>> {
+  name: string; description?: string;
+  parameters: { type: 'object'; [key: string]: unknown };
+  timeoutSeconds?: number;
+  handler: (args: T, context: ToolContext) => unknown | Promise<unknown>;
+}
+interface RegisteredTool { definition: LocalTool; validate: ValidateFunction; timeoutMs: number; }
+export class ClientToolRegistry {
+  readonly #tools = new Map<string, RegisteredTool>();
+  readonly #ajv = new Ajv2020({ strict: false, allErrors: true });
+  constructor() { (addFormats as unknown as (a: Ajv2020) => void)(this.#ajv); }
+  register<T = Record<string, unknown>>(definition: LocalTool<T>): this {
+    if (!/^[a-z][a-z0-9_]{0,254}$/.test(definition.name) || this.#tools.has(definition.name)) throw new TypeError('Invalid or duplicate local tool name');
+    if (definition.parameters.type !== 'object') throw new TypeError('Local tool schema root must be object');
+    const seconds = definition.timeoutSeconds ?? 120;
+    if (!Number.isInteger(seconds) || seconds < 1 || seconds > 600) throw new RangeError('timeoutSeconds must be 1..600');
+    const copy = { ...definition, parameters: structuredClone(definition.parameters) } as unknown as LocalTool;
+    this.#tools.set(copy.name, { definition: copy, validate: this.#ajv.compile(copy.parameters), timeoutMs: seconds * 900 });
+    return this;
+  }
+  get(name: string): RegisteredTool | undefined { return this.#tools.get(name); }
+  /** Registration payloads only. Register remotely using client.tools.create; this performs no I/O. */
+  definitions(): Array<{ name: string; kind: 'client'; description?: string; parameters: LocalTool['parameters']; timeout_seconds: number }> {
+    return [...this.#tools.values()].map(({ definition: d }) => ({ name: d.name, kind: 'client', description: d.description, parameters: structuredClone(d.parameters), timeout_seconds: d.timeoutSeconds ?? 120 }));
+  }
+}
+export type ToolState = 'claimed' | 'completed' | 'submitted' | 'ambiguous' | 'resolved' | 'abandoned';
+export interface ToolRecord {
+  state: ToolState; fingerprint: string; chatId: string; turnId: string; callId: string;
+  output?: string; isError?: boolean;
+}
+/** Implement both mutations atomically and durably before resolving, across all runner processes.
+ * Never automatically expire or steal a claim: a prior local side effect may already have happened.
+ */
+export interface ToolStateStore {
+  claim(key: string, initial: ToolRecord): Promise<boolean>;
+  get(key: string): Promise<ToolRecord | undefined>;
+  transition(key: string, expected: readonly ToolState[], patch: Partial<ToolRecord>): Promise<boolean>;
+}
+/** Explicitly non-durable. Appropriate for tests or a single process where replay-after-crash is not allowed. */
+export class MemoryToolStateStore implements ToolStateStore {
+  readonly #records = new Map<string, ToolRecord>();
+  async claim(key: string, initial: ToolRecord): Promise<boolean> { if (this.#records.has(key)) return false; this.#records.set(key, structuredClone(initial)); return true; }
+  async get(key: string): Promise<ToolRecord | undefined> { const v = this.#records.get(key); return v && structuredClone(v); }
+  async transition(key: string, expected: readonly ToolState[], patch: Partial<ToolRecord>): Promise<boolean> {
+    const v = this.#records.get(key); if (!v || !expected.includes(v.state)) return false;
+    this.#records.set(key, structuredClone({ ...v, ...patch })); return true;
+  }
+}
+export interface ToolRunnerOptions {
+  /** Stable, non-secret account + deployment namespace. Never use an API key here. */
+  scope: string; store: ToolStateStore; registry: ClientToolRegistry; verifier: ToolRequestVerifier;
+  submit: (chatId: string, body: { call_id: string; output: string; is_error: boolean }, options: RequestOptions) => Promise<void>;
+  concurrency?: number; maxPending?: number; signal?: AbortSignal; onObservation?: (event: Observation) => void;
+}
+interface Job { key: string; event: KnownEvent<'agent.tool.request'>; controller: AbortController; admitted: number; }
+function controlled(code: string): { output: string; isError: true } { return { output: JSON.stringify({ code, message: `Client tool failed: ${code}` }), isError: true }; }
+function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const abort = () => { cleanup(); reject(signal.reason); };
+    const cleanup = () => signal.removeEventListener('abort', abort);
+    signal.addEventListener('abort', abort, { once: true });
+    promise.then(v => { cleanup(); resolve(v); }, e => { cleanup(); reject(e); });
+  });
+}
+export class ClientToolRunner {
+  readonly #options: ToolRunnerOptions; readonly #concurrency: number; readonly #maxPending: number;
+  readonly #jobs = new Map<string, Job>(); readonly #queue: Job[] = []; readonly #tasks = new Set<Promise<void>>(); readonly #errors: unknown[] = [];
+  readonly #abort = new AbortController(); #admitting = 0;
+  readonly #endingTurns = new Set<string>(); readonly #resolvingCalls = new Set<string>();
+  constructor(options: ToolRunnerOptions) {
+    if (!options.store || !['claim', 'get', 'transition'].every(method => typeof (options.store as unknown as Record<string, unknown>)[method] === 'function')) throw new TypeError('An explicit ToolStateStore is required');
+    if (!options.scope.trim()) throw new TypeError('A stable account/deployment scope and explicit store are required');
+    this.#options = options; this.#concurrency = positive(options.concurrency ?? 4, 'concurrency'); this.#maxPending = positive(options.maxPending ?? 64, 'maxPending');
+    if (!Number.isInteger(this.#concurrency) || !Number.isInteger(this.#maxPending)) throw new RangeError('Tool limits must be integers');
+  }
+  key(chatId: string, callId: string): string { return JSON.stringify([this.#options.scope, chatId, callId]); }
+  private turnKey(chatId: string, turnId: string): string { return JSON.stringify([this.#options.scope, chatId, 'turn', turnId]); }
+  private async ended(event: ATPEvent): Promise<boolean> {
+    if (!event.turn_id) return false;
+    const key = this.turnKey(event.chat_id, event.turn_id);
+    if (this.#endingTurns.has(key)) return true;
+    return !!await this.#options.store.get(key) || this.#endingTurns.has(key);
+  }
+  private observe(event: Observation): void { try { this.#options.onObservation?.(event); } catch {} }
+  /** Admit verified requests without awaiting handler completion, so result/terminal events remain observable. */
+  async accept(input: ATPEvent): Promise<void> {
+    const event = parseEvent(input); // Fail closed even when callers bypass the SSE parser.
+    const signal = this.#options.signal ? AbortSignal.any([this.#abort.signal, this.#options.signal]) : this.#abort.signal;
+    signal.throwIfAborted();
+    if (isEvent(event, 'agent.tool.result')) {
+      const key = this.key(event.chat_id, event.data.call_id);
+      this.#resolvingCalls.add(key);
+      this.#jobs.get(key)?.controller.abort(new DOMException('Server resolved tool', 'AbortError'));
+      await this.#options.store.claim(key, { state: 'resolved', fingerprint: '', chatId: event.chat_id, turnId: event.turn_id!, callId: event.data.call_id });
+      await this.#options.store.transition(key, ['claimed','completed','submitted','ambiguous','abandoned'], { state: 'resolved' });
+      this.#resolvingCalls.delete(key);
+      return;
+    }
+    if (isTerminal(event)) {
+      const turnKey = this.turnKey(event.chat_id, event.turn_id!);
+      this.#endingTurns.add(turnKey);
+      const endingJobs = [...this.#jobs.values()].filter(j => j.event.chat_id === event.chat_id && j.event.turn_id === event.turn_id);
+      for (const job of endingJobs) job.controller.abort(new DOMException('Turn ended', 'AbortError'));
+      // Persist a turn admission barrier even if no request has arrived yet.
+      await this.#options.store.claim(turnKey, { state: 'abandoned', fingerprint: '', chatId: event.chat_id, turnId: event.turn_id!, callId: '' });
+      await Promise.all(endingJobs.map(async job => {
+        await this.#options.store.transition(job.key, ['claimed','completed','submitted'], { state: 'abandoned' });
+      }));
+      this.#endingTurns.delete(turnKey);
+      return;
+    }
+    if (!isEvent(event, 'agent.tool.request')) return;
+    const admitted = Date.now();
+    await this.#options.verifier.verify(event.data, signal);
+    const key = this.key(event.chat_id, event.data.call_id);
+    const fingerprint = createHash('sha256').update(event.data.call_id + '\n' + event.data.tool_name + '\n' + canonicalize(event.data.args)).digest('hex');
+    if (this.#resolvingCalls.has(key) || await this.ended(event)) return;
+    const existing = await this.#options.store.get(key);
+    if (this.#resolvingCalls.has(key)) return;
+    if (existing) { if (existing.fingerprint && existing.fingerprint !== fingerprint) throw new ToolExecutionError('Call ID reused with different arguments', 'call_id_conflict'); return; }
+    if (this.#jobs.size + this.#admitting >= this.#maxPending) throw new ToolExecutionError('Client tool queue is full', 'queue_full');
+    const record: ToolRecord = { state: 'claimed', fingerprint, chatId: event.chat_id, turnId: event.turn_id!, callId: event.data.call_id };
+    this.#admitting++;
+    let claimed: boolean;
+    try { claimed = await this.#options.store.claim(key, record); } finally { this.#admitting--; }
+    if (!claimed) return;
+    if (this.#resolvingCalls.has(key) || await this.ended(event)) {
+      await this.#options.store.transition(key, ['claimed'], { state: 'abandoned' }); return;
+    }
+    const current = await this.#options.store.get(key);
+    if (current?.state !== 'claimed' || this.#resolvingCalls.has(key)) return;
+    const job: Job = { key, event, controller: new AbortController(), admitted };
+    this.#jobs.set(key, job); this.#queue.push(job); this.pump();
+  }
+  private pump(): void {
+    while (this.#tasks.size < this.#concurrency && this.#queue.length) {
+      const job = this.#queue.shift()!;
+      const task = this.execute(job).catch(error => { this.#errors.push(error); }).finally(() => { this.#tasks.delete(task); this.#jobs.delete(job.key); this.pump(); });
+      this.#tasks.add(task);
+    }
+  }
+  private async execute(job: Job): Promise<void> {
+    const { event, key } = job;
+    const registered = this.#options.registry.get(event.data.tool_name);
+    const timeout = new AbortController();
+    const signal = AbortSignal.any([job.controller.signal, this.#abort.signal, timeout.signal, ...(this.#options.signal ? [this.#options.signal] : [])]);
+    let timer: ReturnType<typeof setTimeout> | undefined; let handler: Promise<unknown> | undefined;
+    this.observe({ kind: 'tool.start', chatId: event.chat_id, turnId: event.turn_id, callId: event.data.call_id });
+    try {
+      signal.throwIfAborted();
+      if (await this.ended(event) || (await this.#options.store.get(key))?.state !== 'claimed') {
+        await this.#options.store.transition(key, ['claimed'], { state: 'abandoned' }); return;
+      }
+      signal.throwIfAborted();
+      const remaining = job.admitted + (registered?.timeoutMs ?? 108_000) - Date.now();
+      let result: { output: string; isError: boolean };
+      if (remaining <= 0) result = controlled('tool_timeout');
+      else if (!registered) result = controlled('unknown_tool');
+      else if (!registered.validate(event.data.args)) result = controlled('invalid_arguments');
+      else {
+        timer = setTimeout(() => timeout.abort(new DOMException('Local tool deadline exceeded', 'TimeoutError')), remaining);
+        try {
+          handler = Promise.resolve().then(() => { signal.throwIfAborted(); return registered.definition.handler(event.data.args, { signal, chatId: event.chat_id, turnId: event.turn_id!, callId: event.data.call_id, idempotencyKey: key }); });
+          const value = await abortable(handler, signal);
+          const output = typeof value === 'string' ? value : JSON.stringify(value);
+          result = typeof output !== 'string' ? controlled('invalid_output') : output.length === 0 ? controlled('empty_output') : Buffer.byteLength(output, 'utf8') > 131_072 ? controlled('output_too_large') : { output, isError: false };
+        } catch { if (job.controller.signal.aborted || this.#abort.signal.aborted || this.#options.signal?.aborted) throw signal.reason; result = controlled(timeout.signal.aborted ? 'tool_timeout' : 'handler_error'); }
+      }
+      clearTimeout(timer);
+      if (!await this.#options.store.transition(key, ['claimed'], { state: 'completed', ...result })) return;
+      // The local execution deadline does not cancel the one permitted delivery of its timeout result.
+      const deliverySignal = AbortSignal.any([job.controller.signal, this.#abort.signal, ...(this.#options.signal ? [this.#options.signal] : [])]);
+      deliverySignal.throwIfAborted();
+      try {
+        await this.#options.submit(event.chat_id, { call_id: event.data.call_id, output: result.output, is_error: result.isError }, { signal: deliverySignal });
+        await this.#options.store.transition(key, ['completed'], { state: 'submitted' });
+      } catch (error) {
+        // A 409/404 or dropped response never proves successful delivery. Wait for the matching result or reconcile.
+        await this.#options.store.transition(key, ['completed'], { state: 'ambiguous' });
+        throw error;
+      }
+    } catch (error) {
+      if (job.controller.signal.aborted || this.#abort.signal.aborted || this.#options.signal?.aborted) await this.#options.store.transition(key, ['claimed','completed'], { state: 'abandoned' });
+      else throw error;
+    } finally {
+      clearTimeout(timer);
+      // Preserve the actual concurrency bound even if a handler ignores cooperative cancellation.
+      if (handler) await handler.catch(() => {});
+      this.observe({ kind: 'tool.end', chatId: event.chat_id, turnId: event.turn_id, callId: event.data.call_id });
+    }
+  }
+  /** Wait for admitted jobs; errors include ambiguous submission outcomes. A noncooperative handler can keep a slot occupied. */
+  async drain(signal?: AbortSignal): Promise<void> {
+    while (this.#tasks.size || this.#queue.length) await (signal ? abortable(Promise.all([...this.#tasks]), signal) : Promise.all([...this.#tasks]));
+    if (this.#errors.length) throw new AggregateError(this.#errors.splice(0), 'Client tool jobs failed; inspect durable state before reconciliation');
+  }
+  close(): void { this.#abort.abort(new DOMException('Tool runner closed', 'AbortError')); }
+  async run(events: AsyncIterable<ATPEvent>): Promise<void> { try { for await (const event of events) await this.accept(event); await this.drain(this.#options.signal); } finally { this.close(); } }
+}
