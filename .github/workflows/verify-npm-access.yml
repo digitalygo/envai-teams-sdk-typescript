@@ -1,0 +1,44 @@
+name: Verify npm access
+on:
+  workflow_dispatch:
+  push:
+    branches: [alpha]
+    paths: ['.github/workflows/verify-npm-access.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.repository == 'digitalygo/envai-teams-sdk-typescript'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+      - name: Verify existing token and npm scope access without publishing
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          node --input-type=module <<'JS'
+          import { execFileSync } from 'node:child_process';
+          if (!process.env.NODE_AUTH_TOKEN) {
+            console.error('::error::NPM_TOKEN is not available to this repository. No package was uploaded.');
+            process.exit(1);
+          }
+          const npm = args => execFileSync('npm', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 });
+          let username, members;
+          try {
+            username = JSON.parse(npm(['whoami', '--json', '--registry=https://registry.npmjs.org']));
+            if (typeof username !== 'string' || !/^[a-zA-Z0-9_.-]+$/.test(username)) throw new Error();
+            members = JSON.parse(npm(['org', 'ls', 'digitalygo', username, '--json', '--registry=https://registry.npmjs.org']));
+          } catch {
+            console.error('::error::Existing npm authentication or digitalygo scope membership could not be verified. No package was uploaded.');
+            process.exit(1);
+          }
+          if (!['owner', 'admin', 'developer'].includes(members[username])) {
+            console.error('::error::The existing npm account has no verified publishing role in @digitalygo. No package was uploaded.');
+            process.exit(1);
+          }
+          console.log('Existing NPM_TOKEN authentication and @digitalygo membership verified. No package was uploaded or account setting changed.');
+          JS
