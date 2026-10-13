@@ -2,24 +2,34 @@
 
 A Node.js 22+ ESM client for the current Envai Teams **alpha** API. It includes typed primitives for all **52 HTTP operations**, all **28 ATP v2 event types**, async SSE streams, turn helpers, and opt-in signed client tools.
 
-**Status:** alpha source distribution. Use a reviewed commit for reproducible builds. API compatibility limits are described below.
+**Status:** alpha prerelease available as a [GitHub release archive](https://github.com/digitalygo/envai-teams-sdk-typescript/releases/tag/v1.0.0-alpha.1). The package is not currently published to the npm registry. Prerelease APIs may change; review upgrades deliberately. API compatibility limits are described below.
 
 - [Installation and configuration](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/getting-started.md)
 - [API and models](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-reference.md) · [all 52 operations](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-inventory.md)
 - [Streaming and recovery](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/streaming.md)
 - [Client-tool safety and deployment](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/client-tools.md)
 
-## Install and verify from source
+## Install the release archive
+
+Install the published GitHub package archive into your application:
 
 ```sh
-git clone --branch alpha https://github.com/digitalygo/envai-teams-sdk-typescript.git
+npm install "https://github.com/digitalygo/envai-teams-sdk-typescript/releases/download/v1.0.0-alpha.1/digitalygo-envai-client-1.0.0-alpha.1.tgz"
+```
+
+This installs `@digitalygo/envai-client` version `1.0.0-alpha.1` from GitHub, without relying on npm registry publication. Commit your application's lock file. This is a Node-only ESM package; it does not claim browser or CommonJS compatibility.
+
+### Build from source instead
+
+```sh
+git clone --branch v1.0.0-alpha.1 https://github.com/digitalygo/envai-teams-sdk-typescript.git
 cd envai-teams-sdk-typescript
 npm ci --ignore-scripts
 npm run build
 npm pack
 ```
 
-The package name is `@digitalygo/envai-client`. No registry release is assumed. After building, a local `npm pack` archive can be installed into an application. This is a Node-only ESM package; it does not claim browser or CommonJS compatibility.
+After building, install the local `.tgz` filename printed by `npm pack`. Use a reviewed commit or the `v1.0.0-alpha.1` tag for a reproducible source build; the `alpha` branch tracks unreleased work.
 
 ## Quick start
 
@@ -180,3 +190,4 @@ The bundled contracts describe API 2.0.0 and ATP v2. Exact source hashes are in 
 Tests make no live Envai requests and need no credentials. CI typechecks the runtime and examples, verifies generation, tests all 52 operations plus schema/SSE/signature/state-machine conformance, enforces at least 95% line/function and 90% branch coverage, and smoke-tests the packed archive on Node 22 and 24. Signature fixtures use public RFC 8032 test-key material only, never account credentials or production signing keys.
 
 MIT, copyright 2026 DigItalyGo. Existing license text is preserved.
+

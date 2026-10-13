@@ -2,19 +2,29 @@
 
 [README](../README.md) · [API reference](api-reference.md) · [Streaming](streaming.md) · [Client tools](client-tools.md)
 
-## Build from public source
+## Install the release archive
 
 Requires Node.js 22 or newer and npm. This is an ESM package for Node.js; browser and CommonJS support are not claimed. Use a supported, patched Node release.
 
+[`v1.0.0-alpha.1`](https://github.com/digitalygo/envai-teams-sdk-typescript/releases/tag/v1.0.0-alpha.1) is a published GitHub prerelease. The package is not currently published to the npm registry. Install its package archive directly:
+
 ```sh
-git clone --branch alpha https://github.com/digitalygo/envai-teams-sdk-typescript.git
+npm install "https://github.com/digitalygo/envai-teams-sdk-typescript/releases/download/v1.0.0-alpha.1/digitalygo-envai-client-1.0.0-alpha.1.tgz"
+```
+
+The archive installs `@digitalygo/envai-client` version `1.0.0-alpha.1`. Prerelease APIs may change; commit your application's lock file and review upgrades deliberately. The release asset's SHA-256 is `a8e8a5b539f2d3a00b27a4ff8643a675859e12a1fa8f78a80bdf63f4ab6f67eb`.
+
+## Build from public source instead
+
+```sh
+git clone --branch v1.0.0-alpha.1 https://github.com/digitalygo/envai-teams-sdk-typescript.git
 cd envai-teams-sdk-typescript
 npm ci --ignore-scripts
 npm run build
 npm pack
 ```
 
-The package name is `@digitalygo/envai-client`. Install the `.tgz` filename printed by `npm pack` into your application with `npm install /absolute/path/to/that-file.tgz`. Use the actual filename rather than assuming a version. The source-install path does not require a published npm registry package. Check out a reviewed commit before building for reproducible use.
+The package name is `@digitalygo/envai-client`. Install the `.tgz` filename printed by `npm pack` into your application with `npm install /absolute/path/to/that-file.tgz`. Use the actual filename rather than assuming a version. The release tag gives a repeatable source checkout. For unreleased changes, explicitly choose the moving `alpha` branch or a reviewed commit SHA instead.
 
 The packed package contains runtime code, TypeScript declarations, contract schemas, README, and license. Full source guides and runnable examples are in this GitHub repository. In your application, import from `@digitalygo/envai-client`; the repository examples import local source so they can be typechecked together.
 
@@ -61,3 +71,4 @@ npm run check:package
 ```
 
 The suite verifies generated files, types, HTTP operations, schemas, SSE, signatures, state transitions, examples, coverage, and a packed-package import. Tests do not contact an Envai deployment or use account credentials. The example tests replace Fetch with offline responses. This verifies client behavior, not your deployment's availability or feature configuration.
+
