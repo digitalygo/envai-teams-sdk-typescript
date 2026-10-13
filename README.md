@@ -1,17 +1,19 @@
 # Envai Teams TypeScript SDK
 
-A Node.js 22+ ESM client for the current Envai Teams **alpha** API. It includes typed primitives for all **52 HTTP operations**, all **28 ATP v2 event types**, async SSE streams, turn helpers, and opt-in signed client tools.
+A Node.js 22+ ESM client for the current Envai Teams **alpha** API. It includes typed primitives for all **65 HTTP operations**, all **29 ATP event types**, async SSE streams, turn helpers, and opt-in signed client tools.
 
 **Status:** alpha prerelease available as a [GitHub release archive](https://github.com/digitalygo/envai-teams-sdk-typescript/releases/tag/v1.0.0-alpha.1). The package is not currently published to the npm registry. Prerelease APIs may change; review upgrades deliberately. API compatibility limits are described below.
 
 - [Installation and configuration](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/getting-started.md)
-- [API and models](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-reference.md) · [all 52 operations](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-inventory.md)
+- [API and models](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-reference.md) · [all 65 operations](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-inventory.md)
 - [Streaming and recovery](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/streaming.md)
 - [Client-tool safety and deployment](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/client-tools.md)
 
 ## Install the release archive
 
-Install the published GitHub package archive into your application:
+The pinned archive here is the historical pre-Wiki release. Wiki V1 requires an alpha artifact containing the contract-3 changes described in this branch; the old archive does not provide those APIs.
+
+Install the historical GitHub package archive into your application:
 
 ```sh
 npm install "https://github.com/digitalygo/envai-teams-sdk-typescript/releases/download/v1.0.0-alpha.1/digitalygo-envai-client-1.0.0-alpha.1.tgz"
@@ -111,7 +113,7 @@ A stream permits one consumer. Break iteration or call `stream.close()` for dete
 
 The parser supports fragmented UTF-8, BOM, CR/LF/CRLF, multi-line data, comments, and unknown SSE fields. It validates full ATP envelopes and known payloads against the pinned JSON Schema. Unknown additive event types remain accessible with `known: false`; use `isEvent` for typed narrowing. Unsupported versions, malformed known payloads, wrong-chat events, inconsistent turn IDs, and unsafe sequence integers fail closed. `ProtocolError.raw` is diagnostic data and can contain private content; do not log it indiscriminately.
 
-Duplicate sequence numbers are suppressed. An observable live gap triggers one replay recovery attempt from the delivered cursor; a repeated gap raises `ReplayGapError`. Stream retries are bounded (five reconnects by default), jittered, cancellable, and observable. Fatal protocol/authentication errors stop immediately. The default idle timeout is 45 seconds; connection timeout is 15 seconds; `maxDurationMs` is optional. Low-level `chats.cancel` asks the server to cancel a turn; only `turn.cancelled` confirms completion. Local `AbortSignal` cancellation closes this client's work and does **not** implicitly cancel a server turn.
+V3 duplicate sequence numbers are suppressed; finite legacy replay instead rejects duplicate or backwards sequences atomically. An observable live gap triggers one replay recovery attempt from the delivered cursor; a repeated gap raises `ReplayGapError`. Stream retries are bounded (five reconnects by default), jittered, cancellable, and observable. Fatal protocol/authentication errors stop immediately. The default idle timeout is 45 seconds; connection timeout is 15 seconds; `maxDurationMs` is optional. Low-level `chats.cancel` asks the server to cancel a turn; only `turn.cancelled` confirms completion. Local `AbortSignal` cancellation closes this client's work and does **not** implicitly cancel a server turn.
 
 ## Signed client tools
 
@@ -171,11 +173,13 @@ Only GETs retry automatically: transient transport failures and 429/502/503/504,
 
 ## Current alpha limitations
 
-The bundled contracts describe API 2.0.0 and ATP v2. Exact source hashes are in `contracts/manifest.json`; using this SDK does not require access to another repository.
+The default client negotiates contract 3 before mutations and validates acknowledgment before decoding. Legacy mode is historical read-only. Unknown costs remain null. See [migration](docs/MIGRATION_V3.md) and [Wiki](docs/WIKI.md).
+
+The bundled contracts describe API 3.0.0 and negotiated ATP v3. Exact source hashes are in `contracts/manifest.json`; using this SDK does not require access to another repository.
 
 - Replay is best-effort, with no durable epoch or cursor-expired response, and sequences can reset after eviction/restart. A reused cursor can silently receive an incomplete tail or only pings. Gap checks cannot detect every reset. Resume is best-effort **within the same resident runtime**; require an application reconciliation policy after known eviction/restart.
 - Replay and live subscription are not atomic. Waiting for the first post-subscription ping reduces the new-turn attach race; it cannot restore already lost events or guarantee every interleaving. Subscriber overflow can silently drop events; observable upward gaps trigger recovery.
-- Capabilities is positive feature discovery, not a parser allowlist. All 28 declared event types remain valid even when discovery lists fewer events.
+- Capabilities is positive feature discovery, not a parser allowlist. All 29 declared event types remain valid even when discovery lists fewer events.
 - A successful `steer` acknowledgement does not guarantee changed execution.
 - Approval resolution currently responds with HTTP 409 and is unavailable as a completed workflow. The primitive preserves that error.
 - Context restore is best-effort. A restore acknowledgement does not guarantee complete or durable history. Reported chat usage can reset and is not a durable billing record.
@@ -185,9 +189,13 @@ The bundled contracts describe API 2.0.0 and ATP v2. Exact source hashes are in 
 
 ## Development and provenance
 
-`npm run generate` deterministically regenerates 86 HTTP models, request/response types, operation primitives, and 28 event payload types from both pinned contracts. SSE, cryptography, tools, and helpers remain handwritten. `npm run check:generated` fails on drift without rewriting files. The two byte-exact HTTP/event contract snapshots have provenance in `testdata/contracts/provenance.json`. `sources` preserves their original commit/path, byte count, SHA-256 and Git blob SHA. `generated_fixtures` separately identifies SDK-authored conformance cases and generated OpenAPI JSON. Public guides are SDK documentation, not copied contract sources. Tests verify every retained source and fixture hash.
+`npm run generate` deterministically regenerates 109 HTTP models, request/response types, operation primitives, and 29 event payload types from both pinned contracts. SSE, cryptography, tools, and helpers remain handwritten. `npm run check:generated` fails on drift without rewriting files. The original v2 snapshots retain provenance in `testdata/contracts/provenance.json`; current shared v3/wiki sources are identified in `contracts/manifest.json`. `sources` preserves their original commit/path, byte count, SHA-256 and Git blob SHA. `generated_fixtures` separately identifies SDK-authored conformance cases and generated OpenAPI JSON. Public guides are SDK documentation, not copied contract sources. Tests verify every retained source and fixture hash.
 
-Tests make no live Envai requests and need no credentials. CI typechecks the runtime and examples, verifies generation, tests all 52 operations plus schema/SSE/signature/state-machine conformance, enforces at least 95% line/function and 90% branch coverage, and smoke-tests the packed archive on Node 22 and 24. Signature fixtures use public RFC 8032 test-key material only, never account credentials or production signing keys.
+Tests make no live Envai requests and need no credentials. CI typechecks the runtime and examples, verifies generation, tests all 65 operations plus schema/SSE/signature/state-machine conformance, enforces at least 95% line/function and 90% branch coverage, and smoke-tests the packed archive on Node 22 and 24. Signature fixtures use public RFC 8032 test-key material only, never account credentials or production signing keys.
 
 MIT, copyright 2026 DigItalyGo. Existing license text is preserved.
 
+
+## Wiki V1 and contract 3
+
+The client defaults to negotiated contract 3, with versioned ATP paths and nullable provider costs. Read [the migration guide](docs/MIGRATION_V3.md) before upgrading a v2 consumer. [Wiki integration](docs/WIKI.md) covers filesystem-backed upload/conversion, explicit inbox/outbox/sync, exhaustive catalog reads, exact-byte Ed25519 webhooks and PostgreSQL atomic receipt/application outbox. Requires Node.js 22+; no browser runtime is claimed.

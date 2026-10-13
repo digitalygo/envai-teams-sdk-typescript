@@ -1,18 +1,18 @@
 # HTTP operation inventory
 
-Generated contract snapshot: API 2.0.0, 52 operations. Paths are relative to the API prefix except the origin-level JWKS endpoint.
+Generated contract snapshot: API 3.0.0, 65 operations. Paths are relative to /api/v1 except the two origin-level public JWKS routes. ATP v3, completion and authenticated source/wiki routes require negotiation. Explicit legacy methods require read-only contract 2.
 
 | Operation ID / client method | HTTP | Path | Bearer |
 | --- | --- | --- | --- |
-| sendChatMessage | POST | `/chats/{chat_id}/messages` | Yes |
-| streamChatEvents | GET | `/chats/{chat_id}/events` | Yes |
-| cancelChatTurn | POST | `/chats/{chat_id}/cancel` | Yes |
-| steerChatTurn | POST | `/chats/{chat_id}/steer` | Yes |
-| resolveChatTool | POST | `/chats/{chat_id}/tool-output` | Yes |
-| resolveChatApproval | POST | `/chats/{chat_id}/approval` | Yes |
-| forkChat | POST | `/chats/{chat_id}/fork` | Yes |
-| restoreChat | POST | `/chats/{chat_id}/restore` | Yes |
-| getCapabilities | GET | `/capabilities` | Yes |
+| sendChatMessage | POST | `/atp/v3/chats/{chat_id}/messages` | Yes |
+| streamChatEvents | GET | `/atp/v3/chats/{chat_id}/events` | Yes |
+| cancelChatTurn | POST | `/atp/v3/chats/{chat_id}/cancel` | Yes |
+| steerChatTurn | POST | `/atp/v3/chats/{chat_id}/steer` | Yes |
+| resolveChatTool | POST | `/atp/v3/chats/{chat_id}/tool-output` | Yes |
+| resolveChatApproval | POST | `/atp/v3/chats/{chat_id}/approval` | Yes |
+| forkChat | POST | `/atp/v3/chats/{chat_id}/fork` | Yes |
+| restoreChat | POST | `/atp/v3/chats/{chat_id}/restore` | Yes |
+| getCapabilities | GET | `/atp/v3/capabilities` | Yes |
 | healthCheck | GET | `/up` | No |
 | getJwks | GET | `/.well-known/jwks.json` | No |
 | createWorkspace | POST | `/workspaces` | Yes |
@@ -56,3 +56,16 @@ Generated contract snapshot: API 2.0.0, 52 operations. Paths are relative to the
 | listImageModels | GET | `/images/models` | Yes |
 | downloadArtifact | GET | `/artifacts/download` | No |
 | handleProviderWebhook | POST | `/webhooks/providers/{provider}` | No |
+| uploadWikiSource | POST | `/workspaces/{workspace_id}/files/sources` | Yes |
+| getWikiSource | GET | `/workspaces/{workspace_id}/files/sources/{file_id}` | Yes |
+| downloadWikiSource | GET | `/workspaces/{workspace_id}/files/sources/{file_id}/download` | Yes |
+| withdrawWikiSource | POST | `/workspaces/{workspace_id}/wiki/outbox/files` | Yes |
+| createWikiInboxRun | POST | `/workspaces/{workspace_id}/wiki/inbox/runs` | Yes |
+| createWikiOutboxRun | POST | `/workspaces/{workspace_id}/wiki/outbox/runs` | Yes |
+| createWikiSyncRun | POST | `/workspaces/{workspace_id}/wiki/syncs` | Yes |
+| getWikiOperation | GET | `/workspaces/{workspace_id}/wiki/operations/{operation_id}` | Yes |
+| listWikiCategories | GET | `/workspaces/{workspace_id}/wiki/categories` | Yes |
+| getWikiCategoryIndex | GET | `/workspaces/{workspace_id}/wiki/categories/{category_id}/index` | Yes |
+| getWikiWebhookJwks | GET | `/.well-known/wiki-webhook-jwks.json` | No |
+| streamChatEventsLegacy | GET | `/chats/{chat_id}/events` | Yes |
+| getCapabilitiesLegacy | GET | `/capabilities` | Yes |

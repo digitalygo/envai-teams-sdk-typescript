@@ -2,6 +2,28 @@
 import { HttpTransport, type RequestOptions } from "./http.js";
 import { operations } from "./operations.js";
 import type { AtpUsage } from "./event-types.js";
+export type CompletionTerminalSnapshotUsage = { "input_tokens"?: number; "output_tokens"?: number; "duration_ms"?: number; "sprite_ms"?: number; "sprite_ram_gb_ms"?: number; "tool_calls"?: number; "cost_usd"?: number | null; "billing"?: BillingState; "usage_cost"?: UsageCost };
+export type CompletionTerminalSnapshot = { "event_id": string; "occurred_at": string; "event_type": "turn.completed" | "turn.failed" | "turn.cancelled"; "data": { "turn_id": string; "usage"?: CompletionTerminalSnapshotUsage; "cost"?: number | null; "finish_reason"?: string; "reason"?: string; "code"?: string; "message"?: string; "chat_usage"?: CompletionTerminalSnapshotChatUsage; "chat_cost"?: number | null }; "v"?: 2 | 3; "accepted_protocol_version"?: 2 | 3 };
+export type CompletionTerminalSnapshotChatUsage = { "input_tokens": number; "output_tokens": number; "cost_usd": number | null; "duration_ms": number; "sprite_ms"?: number; "sprite_ram_gb_ms"?: number; "tool_calls"?: number; "billing"?: BillingState; "usage_cost"?: UsageCost };
+export type BillingState = { "status": "inactive"; [key: string]: unknown };
+export type CurrencyAmount = { "currency": string; "amount": string; [key: string]: unknown };
+export type UsageCost = ({ "status": "pending" | "complete"; "basis": "reported" | "calculated" | "mixed" | "none"; "scope_status": "open" | "closed"; "revision": number; "as_of": string; "invocation_count": number; "pending_invocation_count": number; "totals": (Array<CurrencyAmount> | null); "priced_subtotals": Array<CurrencyAmount>; [key: string]: unknown });
+export type ConversionState = { "status": "queued" | "running" | "completed" | "failed"; "error_code"?: string | null; "recoverable"?: boolean; "next_retry_at"?: string | null; [key: string]: unknown };
+export type IndexingState = { "status": "pending_conversion" | "pending" | "processed" | "withdrawn" | "failed"; [key: string]: unknown };
+export type WikiSource = { "file_id": string; "workspace_id": string; "original_name": string; "mime_type": string; "byte_size": number; "lifecycle": "uploaded" | "inbox" | "raw" | "outbox" | "deleting" | "deleted"; "source_revision": number; "conversion": ConversionState; "indexing": IndexingState; "canonical_raw_path": (string | null); "billing": BillingState; "usage_cost": UsageCost; "status_url": string; [key: string]: unknown };
+export type BatchSizes = { "inbox": number; "outbox": number; [key: string]: unknown };
+export type FileOutcome = { "file_id": string; "status": "pending" | "running" | "succeeded" | "withdrawn" | "failed"; "error_code": (string | null); [key: string]: unknown };
+export type PhaseResult = { "status": "pending" | "running" | "completed" | "failed" | "skipped_empty"; "selected": number; "succeeded": number; "withdrawn": number; "failed": number; "files": Array<FileOutcome>; [key: string]: unknown };
+export type WikiOperation = { "operation_id": string; "workspace_id": string; "kind": "inbox" | "outbox" | "sync"; "status": "queued" | "running" | "completed" | "failed"; "phase": (string | null); "phases": { "inbox"?: PhaseResult; "outbox"?: PhaseResult }; "started_at": (string | null); "finished_at": (string | null); "batch_sizes": BatchSizes; "billing": BillingState; "usage_cost": UsageCost; [key: string]: unknown };
+export type Category = { "category_id": string; "name": string; "description": string; [key: string]: unknown };
+export type Categories = { "categories": Array<Category>; "catalog_revision": number; [key: string]: unknown };
+export type CatalogEntry = { "entry_id": string; "type": "raw" | "artifact"; "target_id": string; "canonical_path": string; "description": string; "inserted_at": string; [key: string]: unknown };
+export type IndexRange = { "from": number; "to": number; [key: string]: unknown };
+export type CategoryIndex = { "entries": Array<CatalogEntry>; "total_count": number; "returned_count": number; "requested_range": (IndexRange | null); "actual_range": (IndexRange | null); "catalog_revision": number; "is_complete": boolean; [key: string]: unknown };
+export type WikiFileProcessedEvent = { "schema_version": "1"; "event_id": string; "event_type": "wiki.inbox.file.processed"; "operation_id": string; "workspace_id": string; "occurred_at": string; "file_id": string; "source_revision": number; "canonical_raw_path": string; "availability": "raw"; [key: string]: unknown };
+export type WikiFileDeletedEvent = { "schema_version": "1"; "event_id": string; "event_type": "wiki.outbox.file.deleted"; "operation_id": string; "workspace_id": string; "occurred_at": string; "file_id": string; "source_revision": number; "previous_canonical_raw_path": string | null; "lifecycle": "deleted"; [key: string]: unknown };
+export type WikiOperationEvent = ({ "schema_version": "1"; "event_id": string; "event_type": "wiki.inbox.completed" | "wiki.inbox.failed" | "wiki.outbox.completed" | "wiki.outbox.failed" | "wiki.sync.completed" | "wiki.sync.failed"; "operation_id": string; "workspace_id": string; "occurred_at": string; "status": "completed" | "failed"; "phases": { "inbox"?: PhaseResult; "outbox"?: PhaseResult }; "finished_at": string; "billing": BillingState; "usage_cost": UsageCost; [key: string]: unknown });
+export type WikiWebhookEvent = (WikiFileProcessedEvent | WikiFileDeletedEvent | WikiOperationEvent);
 export type Error = { "error": { "type": "unauthenticated" | "invalid_request" | "not_found" | "conflict" | "validation_error" | "access_denied" | "provider_error" | "server_error" | "internal_error" | "file_not_found" | "file_conflict" | "invalid_path" | "file_too_large" | "file_service_error" | "file_service_unavailable" | "too_many_requests"; "code"?: string | null; "message": string; "details"?: { [key: string]: unknown } | null; [key: string]: unknown }; [key: string]: unknown };
 export type ChatMessageRequest = { "message": string; [key: string]: unknown };
 export type ChatMessageAccepted = { "status": "accepted"; "turn_id": string; [key: string]: unknown };
@@ -14,7 +36,7 @@ export type ChatForked = { "source_chat_id": string; "destination_chat_id": stri
 export type OrchestratorContextItem = { "kind": "compacted" | "assistant"; "turn_id"?: string | null; "content": string; [key: string]: unknown };
 export type RestoreChatRequest = { "orchestrator_context": Array<OrchestratorContextItem>; [key: string]: unknown };
 export type RestoreChatAccepted = { "status": "restored"; "turn_id": string | null; [key: string]: unknown };
-export type Capabilities = { "protocol_version": number; "families": Array<"turn" | "agent">; "event_types": Array<string>; "tool_kinds": Array<"server" | "client" | "knowledge" | "code">; "features": Array<"replay" | "fork" | "restore" | "ping" | "background_delegation" | "client_tools">; [key: string]: unknown };
+export type Capabilities = { "protocol_version": 3; "families": Array<"turn" | "agent" | "chat">; "event_types": Array<string>; "tool_kinds": Array<"server" | "client" | "knowledge" | "code">; "features": Array<string>; "contract_version": 3; "supported_contract_versions": Array<2 | 3>; "legacy_v2_mode": "historical_reads_replay_only"; [key: string]: unknown };
 export type Workspace = { "id": string; "user_id": string; "name": string; "metadata": WorkspaceMetadata; "created_at": string; "updated_at": string; [key: string]: unknown };
 export type WorkspaceResource = { "data": Workspace; [key: string]: unknown };
 export type WorkspaceCollection = { "data": Array<Workspace>; [key: string]: unknown };
@@ -26,11 +48,11 @@ export type UserToolResource = { "data": UserTool; [key: string]: unknown };
 export type UserToolCollection = { "data": Array<UserTool>; [key: string]: unknown };
 export type UserToolCreateRequest = { "name": string; "kind"?: "client"; "description"?: string | null; "parameters": { "type": "object"; [key: string]: unknown }; "timeout_seconds"?: number };
 export type UserToolUpdateRequest = (unknown | unknown | unknown);
-export type Chat = { "id": string; "workspace_id": string; "user_id": string; "team_id": string; "created_at": string; "updated_at": string; [key: string]: unknown };
+export type Chat = { "id": string; "workspace_id": string; "user_id": string; "team_id": string; "title": string | null; "created_at": string; "updated_at": string; [key: string]: unknown };
 export type ChatResource = { "data": Chat; [key: string]: unknown };
 export type ChatCollection = { "data": Array<Chat>; [key: string]: unknown };
 export type ChatCreateRequest = { "team_id": string; [key: string]: unknown };
-export type Completion = { "id": string; "workspace_id": string; "chat_id": string; "team_id": string; "user_id": string; "model_orchestrator"?: string | null; "models_subagents": Array<string>; "started_at": string; "finished_at"?: string | null; "duration_ms"?: number | null; "usage": { "prompt_tokens"?: number; "completion_tokens"?: number; "sprite_cpu_ms"?: number; "sprite_ram_gb_ms"?: number; [key: string]: unknown }; "cost_usd": number; "status": "running" | "succeeded" | "failed" | "canceled"; "finish_reason"?: "stop" | "error" | "canceled" | null; "content_hash"?: string | null; "created_at": string; "updated_at": string; [key: string]: unknown };
+export type Completion = { "id": string; "workspace_id": string; "chat_id": string; "team_id": string; "user_id": string; "model_orchestrator"?: string | null; "models_subagents": Array<string>; "started_at": string; "finished_at"?: string | null; "duration_ms"?: number | null; "usage": { "prompt_tokens"?: number; "completion_tokens"?: number; "sprite_cpu_ms"?: number; "sprite_ram_gb_ms"?: number; [key: string]: unknown }; "billing"?: BillingState; "usage_cost"?: UsageCost; "terminal_snapshot"?: (CompletionTerminalSnapshot | null); "cost_usd": number | null; "status": "running" | "succeeded" | "failed" | "canceled"; "finish_reason"?: "stop" | "error" | "canceled" | null; "content_hash"?: string | null; "created_at": string; "updated_at": string; [key: string]: unknown };
 export type CompletionResource = { "data": Completion; [key: string]: unknown };
 export type CompletionCollection = { "data": Array<Completion>; "links": { "first"?: string | null; "last"?: string | null; "prev"?: string | null; "next"?: string | null; [key: string]: unknown }; "meta": { "current_page"?: number; "from"?: number | null; "last_page"?: number; "per_page"?: number; "to"?: number | null; "total"?: number; [key: string]: unknown }; [key: string]: unknown };
 export type Agent = { "id": string; "user_id": string; "name": string; "description": string | null; "system_prompt": string; "model": string | null; "mode": "primary" | "subagent"; "tools_enabled": Array<AgentTool>; "external_tools_enabled": Array<AgentTool>; "permissions": { [key: string]: unknown }; "can_write_knowledge": boolean; "can_write_skills": boolean; "config": { [key: string]: unknown }; "created_at": string; "updated_at": string; [key: string]: unknown };
@@ -88,6 +110,7 @@ export type WorkspaceFileResource = { "data": WorkspaceFile; [key: string]: unkn
 export type WorkspaceFileRequest = { "path": string; "content": string; [key: string]: unknown };
 export type ConvertToPdfRequest = { "path": string; [key: string]: unknown };
 export type ThrottleError = { "error": { "type": "too_many_requests"; "message": string }; [key: string]: unknown };
+export type CapabilitiesLegacy = { "protocol_version": 2; "families": Array<"turn" | "agent" | "chat">; "event_types": Array<string>; "tool_kinds": Array<"server" | "client" | "knowledge" | "code">; "features": Array<"replay" | "fork" | "restore" | "ping" | "background_delegation" | "client_tools" | "chat_title">; [key: string]: unknown };
 export type SendChatMessageParams = { "chat_id": string; body: ChatMessageRequest };
 export type SendChatMessageResult = ChatMessageAccepted;
 export type StreamChatEventsParams = { "chat_id": string; "after"?: number };
@@ -105,7 +128,7 @@ export type ForkChatResult = ChatForked;
 export type RestoreChatParams = { "chat_id": string; body: RestoreChatRequest };
 export type RestoreChatResult = RestoreChatAccepted;
 export type GetCapabilitiesParams = Record<string, never>;
-export type GetCapabilitiesResult = Capabilities;
+export type GetCapabilitiesResult = Capabilities | CapabilitiesLegacy;
 export type HealthCheckParams = Record<string, never>;
 export type HealthCheckResult = { "status"?: string; "timestamp"?: string; "app"?: string; "env"?: string; [key: string]: unknown };
 export type GetJwksParams = Record<string, never>;
@@ -192,6 +215,32 @@ export type DownloadArtifactParams = { "generation": string; "artifact": string;
 export type DownloadArtifactResult = Response;
 export type HandleProviderWebhookParams = { "provider": "replicate" | "vertex" | "fal" | "openai" | "black-forest-labs" | "recraft" | "byteplus"; "callback_token"?: string; body?: ProviderWebhookPayload };
 export type HandleProviderWebhookResult = WebhookOk;
+export type UploadWikiSourceParams = { "workspace_id": string; "idempotencyKey": string; body: { "file": Blob; [key: string]: unknown } };
+export type UploadWikiSourceResult = WikiSource;
+export type GetWikiSourceParams = { "workspace_id": string; "file_id": string };
+export type GetWikiSourceResult = WikiSource;
+export type DownloadWikiSourceParams = { "workspace_id": string; "file_id": string };
+export type DownloadWikiSourceResult = Response;
+export type WithdrawWikiSourceParams = { "workspace_id": string; body: { "file_id": string; [key: string]: unknown } };
+export type WithdrawWikiSourceResult = WikiSource;
+export type CreateWikiInboxRunParams = { "workspace_id": string; "idempotencyKey": string; body: { "webhook_url": string; [key: string]: unknown } };
+export type CreateWikiInboxRunResult = WikiOperation;
+export type CreateWikiOutboxRunParams = { "workspace_id": string; "idempotencyKey": string; body: { "webhook_url": string; [key: string]: unknown } };
+export type CreateWikiOutboxRunResult = WikiOperation;
+export type CreateWikiSyncRunParams = { "workspace_id": string; "idempotencyKey": string; body: { "webhook_url": string; [key: string]: unknown } };
+export type CreateWikiSyncRunResult = WikiOperation;
+export type GetWikiOperationParams = { "workspace_id": string; "operation_id": string };
+export type GetWikiOperationResult = WikiOperation;
+export type ListWikiCategoriesParams = { "workspace_id": string };
+export type ListWikiCategoriesResult = Categories;
+export type GetWikiCategoryIndexParams = { "workspace_id": string; "category_id": string; "from"?: number; "to"?: number; "all"?: boolean; "type"?: "raw" | "artifact"; "catalog_revision"?: number };
+export type GetWikiCategoryIndexResult = CategoryIndex;
+export type GetWikiWebhookJwksParams = Record<string, never>;
+export type GetWikiWebhookJwksResult = JwksDocument;
+export type StreamChatEventsLegacyParams = { "chat_id": string; "after"?: number };
+export type StreamChatEventsLegacyResult = Response;
+export type GetCapabilitiesLegacyParams = Record<string, never>;
+export type GetCapabilitiesLegacyResult = CapabilitiesLegacy;
 export class GeneratedClient {
  constructor(protected readonly transport: HttpTransport) {}
  /** Send a message and start a turn */
@@ -298,15 +347,42 @@ export class GeneratedClient {
  downloadArtifact(params: DownloadArtifactParams, options: RequestOptions = {}): Promise<DownloadArtifactResult> { return this.transport.request(operations.downloadArtifact, params, options); }
  /** Receive a provider webhook */
  handleProviderWebhook(params: HandleProviderWebhookParams, options: RequestOptions = {}): Promise<HandleProviderWebhookResult> { return this.transport.request(operations.handleProviderWebhook, params, options); }
+ /** uploadWikiSource */
+ uploadWikiSource(params: UploadWikiSourceParams, options: RequestOptions = {}): Promise<UploadWikiSourceResult> { return this.transport.request(operations.uploadWikiSource, params, options); }
+ /** getWikiSource */
+ getWikiSource(params: GetWikiSourceParams, options: RequestOptions = {}): Promise<GetWikiSourceResult> { return this.transport.request(operations.getWikiSource, params, options); }
+ /** downloadWikiSource */
+ downloadWikiSource(params: DownloadWikiSourceParams, options: RequestOptions = {}): Promise<DownloadWikiSourceResult> { return this.transport.request(operations.downloadWikiSource, params, options); }
+ /** withdrawWikiSource */
+ withdrawWikiSource(params: WithdrawWikiSourceParams, options: RequestOptions = {}): Promise<WithdrawWikiSourceResult> { return this.transport.request(operations.withdrawWikiSource, params, options); }
+ /** createWikiInboxRun */
+ createWikiInboxRun(params: CreateWikiInboxRunParams, options: RequestOptions = {}): Promise<CreateWikiInboxRunResult> { return this.transport.request(operations.createWikiInboxRun, params, options); }
+ /** createWikiOutboxRun */
+ createWikiOutboxRun(params: CreateWikiOutboxRunParams, options: RequestOptions = {}): Promise<CreateWikiOutboxRunResult> { return this.transport.request(operations.createWikiOutboxRun, params, options); }
+ /** createWikiSyncRun */
+ createWikiSyncRun(params: CreateWikiSyncRunParams, options: RequestOptions = {}): Promise<CreateWikiSyncRunResult> { return this.transport.request(operations.createWikiSyncRun, params, options); }
+ /** getWikiOperation */
+ getWikiOperation(params: GetWikiOperationParams, options: RequestOptions = {}): Promise<GetWikiOperationResult> { return this.transport.request(operations.getWikiOperation, params, options); }
+ /** listWikiCategories */
+ listWikiCategories(params: ListWikiCategoriesParams, options: RequestOptions = {}): Promise<ListWikiCategoriesResult> { return this.transport.request(operations.listWikiCategories, params, options); }
+ /** getWikiCategoryIndex */
+ getWikiCategoryIndex(params: GetWikiCategoryIndexParams, options: RequestOptions = {}): Promise<GetWikiCategoryIndexResult> { return this.transport.request(operations.getWikiCategoryIndex, params, options); }
+ /** Read existing public wiki webhook signing keys */
+ getWikiWebhookJwks(params: GetWikiWebhookJwksParams = {}, options: RequestOptions = {}): Promise<GetWikiWebhookJwksResult> { return this.transport.request(operations.getWikiWebhookJwks, params, options); }
+ /** Stream chat events */
+ streamChatEventsLegacy(params: StreamChatEventsLegacyParams, options: RequestOptions = {}): Promise<StreamChatEventsLegacyResult> { return this.transport.request(operations.streamChatEventsLegacy, params, options); }
+ /** Advertised protocol metadata */
+ getCapabilitiesLegacy(params: GetCapabilitiesLegacyParams = {}, options: RequestOptions = {}): Promise<GetCapabilitiesLegacyResult> { return this.transport.request(operations.getCapabilitiesLegacy, params, options); }
  readonly workspaces = { create: this.createWorkspace.bind(this), list: this.listWorkspaces.bind(this), get: this.getWorkspace.bind(this), update: this.updateWorkspace.bind(this) };
  readonly tools = { create: this.createUserTool.bind(this), list: this.listUserTools.bind(this), get: this.getUserTool.bind(this), update: this.updateUserTool.bind(this), delete: this.deleteUserTool.bind(this) };
  readonly chats = { create: this.createChat.bind(this), list: this.listChats.bind(this), get: this.getChat.bind(this), sendMessage: this.sendChatMessage.bind(this), eventsResponse: this.streamChatEvents.bind(this), cancel: this.cancelChatTurn.bind(this), steer: this.steerChatTurn.bind(this), submitToolOutput: this.resolveChatTool.bind(this), submitApproval: this.resolveChatApproval.bind(this), fork: this.forkChat.bind(this), restore: this.restoreChat.bind(this) };
  readonly completions = { list: this.listCompletions.bind(this), get: this.getCompletion.bind(this) };
- readonly workspaceFiles = { get: this.indexWorkspaceFiles.bind(this), create: this.createWorkspaceFile.bind(this), update: this.updateWorkspaceFile.bind(this), delete: this.deleteWorkspaceFile.bind(this), download: this.downloadWorkspaceFile.bind(this), convertToPdf: this.convertWorkspaceFileToPdf.bind(this) };
+ readonly workspaceFiles = { get: this.indexWorkspaceFiles.bind(this), create: this.createWorkspaceFile.bind(this), update: this.updateWorkspaceFile.bind(this), delete: this.deleteWorkspaceFile.bind(this), download: this.downloadWorkspaceFile.bind(this), convertToPdf: this.convertWorkspaceFileToPdf.bind(this), uploadSource: this.uploadWikiSource.bind(this), sourceStatus: this.getWikiSource.bind(this), downloadSource: this.downloadWikiSource.bind(this) };
  readonly agents = { create: this.createAgent.bind(this), list: this.listAgents.bind(this), get: this.getAgent.bind(this), update: this.updateAgent.bind(this), delete: this.deleteAgent.bind(this) };
  readonly teams = { create: this.createTeam.bind(this), list: this.listTeams.bind(this), get: this.getTeam.bind(this), update: this.updateTeam.bind(this), delete: this.deleteTeam.bind(this) };
  readonly apiKeys = { create: this.createApiKey.bind(this), list: this.listApiKeys.bind(this), delete: this.deleteApiKey.bind(this) };
  readonly models = { list: this.listModels.bind(this) };
  readonly images = { create: this.createImageGeneration.bind(this), get: this.getImageGeneration.bind(this), upload: this.uploadImage.bind(this), models: this.listImageModels.bind(this), testGenerate: this.testGenerateImage.bind(this), downloadArtifact: this.downloadArtifact.bind(this) };
+ readonly wiki = { inbox: this.createWikiInboxRun.bind(this), outbox: this.createWikiOutboxRun.bind(this), sync: this.createWikiSyncRun.bind(this), operation: this.getWikiOperation.bind(this), withdraw: this.withdrawWikiSource.bind(this), categories: this.listWikiCategories.bind(this), categoryIndex: this.getWikiCategoryIndex.bind(this) };
  readonly capabilities = { get: this.getCapabilities.bind(this) };
 }

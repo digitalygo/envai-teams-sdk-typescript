@@ -1,0 +1,75 @@
+{
+  "baseline_sdk_commit": "402af49ec08e2977f297b598a655728be4d66827",
+  "method": "Diff compiled handwritten runtime against original indexed source; intersect changed nonblank/noncomment lines with Node V8 LCOV DA entries. Generated HTTP/event declarations and operation metadata excluded. This is compiled line coverage, not a statement-count claim.",
+  "changed_executable_lines": 406,
+  "covered": 404,
+  "coverage_percent": 99.51,
+  "files": [
+    {
+      "file": "dist/client.js",
+      "changed_executable_lines": 7,
+      "covered": 7,
+      "coverage_percent": 100.0,
+      "uncovered": []
+    },
+    {
+      "file": "dist/contract.js",
+      "changed_executable_lines": 76,
+      "covered": 76,
+      "coverage_percent": 100.0,
+      "uncovered": []
+    },
+    {
+      "file": "dist/events.js",
+      "changed_executable_lines": 11,
+      "covered": 11,
+      "coverage_percent": 100.0,
+      "uncovered": []
+    },
+    {
+      "file": "dist/http.js",
+      "changed_executable_lines": 55,
+      "covered": 55,
+      "coverage_percent": 100.0,
+      "uncovered": []
+    },
+    {
+      "file": "dist/index.js",
+      "changed_executable_lines": 5,
+      "covered": 5,
+      "coverage_percent": 100.0,
+      "uncovered": []
+    },
+    {
+      "file": "dist/stream.js",
+      "changed_executable_lines": 47,
+      "covered": 47,
+      "coverage_percent": 100.0,
+      "uncovered": []
+    },
+    {
+      "file": "dist/wiki-inbox.js",
+      "changed_executable_lines": 52,
+      "covered": 52,
+      "coverage_percent": 100.0,
+      "uncovered": []
+    },
+    {
+      "file": "dist/wiki-webhooks.js",
+      "changed_executable_lines": 120,
+      "covered": 118,
+      "coverage_percent": 98.33,
+      "uncovered": [
+        104,
+        105
+      ]
+    },
+    {
+      "file": "dist/wiki.js",
+      "changed_executable_lines": 33,
+      "covered": 33,
+      "coverage_percent": 100.0,
+      "uncovered": []
+    }
+  ]
+}

@@ -12,6 +12,8 @@ Requires Node.js 22 or newer and npm. This is an ESM package for Node.js; browse
 npm install "https://github.com/digitalygo/envai-teams-sdk-typescript/releases/download/v1.0.0-alpha.1/digitalygo-envai-client-1.0.0-alpha.1.tgz"
 ```
 
+The pinned archive below is the historical pre-Wiki release. Wiki V1 requires an alpha artifact containing this contract-3 change.
+
 The archive installs `@digitalygo/envai-client` version `1.0.0-alpha.1`. Prerelease APIs may change; commit your application's lock file and review upgrades deliberately. The release asset's SHA-256 is `a8e8a5b539f2d3a00b27a4ff8643a675859e12a1fa8f78a80bdf63f4ab6f67eb`.
 
 ## Build from public source instead
@@ -34,6 +36,7 @@ The packed package contains runtime code, TypeScript declarations, contract sche
 
 | Option | Default / behavior |
 | --- | --- |
+| `contractVersion` | `3`; use `2` only for explicit historical read-only access. |
 | `baseUrl` | Required trusted API URL. |
 | `apiKey` | Explicit bearer key for authenticated operations; omitted on public/signed operations. |
 | `jwksUrl` | Origin-level `/.well-known/jwks.json`; override only with a trusted signing-key endpoint. |

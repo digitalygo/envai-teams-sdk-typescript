@@ -4,7 +4,7 @@ import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { chatId, turnId, event, json, sse } from './helpers.mjs';
+import { chatId, turnId, event, json, sse, capabilities } from './helpers.mjs';
 
 const build = mkdtempSync(resolve('.examples-test-'));
 execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.examples.json', '--noEmit', 'false', '--outDir', build]);
@@ -31,6 +31,7 @@ for (const example of ['quickstart', 'client-tools']) {
    const path = new URL(url).pathname;
    calls.push({ path, method: init.method });
    assert.equal(new Headers(init.headers).get('authorization'), 'Bearer example-fixture');
+   if (path.endsWith('/atp/v3/capabilities')) return json(capabilities);
    if (path.endsWith('/events')) return sse([
     event('ping', 0), event('turn.started', 1), event('agent.text.delta', 2), event('turn.completed', 3),
    ]);

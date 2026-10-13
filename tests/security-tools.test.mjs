@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { EnvaiClient, canonicalize, JwksCache, ToolRequestVerifier, SignatureError, ClientToolRegistry, ClientToolRunner, MemoryToolStateStore, ToolExecutionError, ConflictError, NotFoundError, parseEvent } from '../dist/index.js';
 import { signatures,requestEvent,event,chatId,turnId,tick,json,sse } from './helpers.mjs';
+import {negotiatedFetch} from './helpers.mjs';
 const verification = () => new ToolRequestVerifier({get:async()=>signatures.jwks});
 for(const [i,v]of signatures.vectors.entries())test('shared RFC8785/Ed25519 vector: '+v.name,async()=>{
  assert.equal(canonicalize(JSON.parse(v.args_json)),v.canonical);await verification().verify(requestEvent(i).data);const canonicalRequest=requestEvent(i);canonicalRequest.data.args=JSON.parse(v.canonical);await verification().verify(canonicalRequest.data);assert.equal(canonicalize(canonicalRequest.data.args),v.canonical);
@@ -68,7 +69,7 @@ test('failure to persist a claim blocks effects; concurrent atomic claims execut
 test('signature/schema/envelope validation precedes handler invocation; unknown local tool reports controlled error',async()=>{
  let effects=0;const {instance,submissions}=runner({registry:registry(()=>{effects++;return 'ok';},{type:'object',properties:{required:{type:'string'}},required:['required'],additionalProperties:false})});
  const bad=signed();bad.data.args.tampered=true;await assert.rejects(instance.accept(bad),SignatureError);assert.equal(effects,0);assert.equal(submissions.length,0);
- await assert.rejects(instance.accept({...signed(),v:3}));
+ await assert.rejects(instance.accept({...signed(),v:4}));
  await instance.accept(signed({required:1}));await instance.accept(signed({},'not_registered'));await instance.drain();assert.equal(effects,0);
  assert.deepEqual(submissions.map(x=>JSON.parse(x.body.output).code).sort(),['invalid_arguments','unknown_tool']);assert.ok(submissions.every(x=>x.body.is_error));
 });
@@ -124,7 +125,7 @@ test('runner close and drain cancellation propagate; run consumes control events
  let finish;const pending=runner({registry:registry(()=>new Promise(r=>finish=r))});await pending.instance.accept(signed());await tick();const abort=new AbortController();const wait=pending.instance.drain(abort.signal);abort.abort();await assert.rejects(wait);pending.instance.close();finish('done');await pending.instance.drain();
 });
 test('EnvaiClient tool factory fetches unauthenticated JWKS, registers explicitly and submits through shared transport',async()=>{
- const calls=[];const c=new EnvaiClient({baseUrl:'https://example.test',apiKey:'secret',fetch:async(url,init)=>{calls.push({url,init});if(url.endsWith('jwks.json'))return json(jwks);return new Response(null,{status:204});}});
+ const calls=[];const c=new EnvaiClient({baseUrl:'https://example.test',apiKey:'secret',fetch:negotiatedFetch(async(url,init)=>{calls.push({url,init});if(url.endsWith('jwks.json'))return json(jwks);return new Response(null,{status:204});})});
  const r=c.createToolRunner({scope:'example/account',store:new MemoryToolStateStore(),registry:registry(()=>({ok:true}))});await r.accept(signed());await r.drain();
  assert.equal(calls.length,2);assert.equal(calls[0].init.headers.get('authorization'),null);assert.equal(calls[1].init.headers.get('authorization'),'Bearer secret');assert.equal(calls[1].init.method,'POST');
 });

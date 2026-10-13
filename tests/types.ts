@@ -13,3 +13,23 @@ function consume(event: ATPEvent) {
   return event.type;
 }
 void missingTeam; void wrongAgent; void wrongOutput; void consume;
+
+import { type LegacyAtpUsage, type AtpUsage, type UsageCost, parseEvent, type WikiSource, type WikiWebhookEvent } from '../src/index.js';
+// @ts-expect-error Legacy ATPv2 cost is strictly numeric.
+const invalidLegacy: LegacyAtpUsage = { input_tokens: 0, output_tokens: 0, cost_usd: null, duration_ms: 0 };
+const nullable: AtpUsage = { input_tokens: 0, output_tokens: 0, cost_usd: null, duration_ms: 0 };
+// @ts-expect-error Decimal amount is a string, not a JavaScript number.
+const rounded: UsageCost['priced_subtotals'][number] = { currency: 'USD', amount: 0.1 };
+// @ts-expect-error Upload/run keys are explicit and mandatory.
+void client.wiki.inbox({ workspace_id: 'w', body: { webhook_url: 'https://app.example/hook' } });
+function legacyCost(raw: unknown) {
+  const parsed = parseEvent(raw, 2);
+  if (parsed.known && parsed.type === 'turn.completed') { const amount: number = parsed.data.cost; return amount; }
+}
+function sourceState(source: WikiSource) { const status: 'queued' | 'running' | 'completed' | 'failed' = source.conversion.status; return status; }
+function webhookState(event: WikiWebhookEvent) {
+  if (event.event_type === 'wiki.inbox.file.processed') { const revision: number = event.source_revision; return revision; }
+  if (event.event_type === 'wiki.outbox.file.deleted') { const old: string | null = event.previous_canonical_raw_path; return old; }
+  const total: UsageCost['totals'] = event.usage_cost.totals; return total;
+}
+void invalidLegacy; void nullable; void rounded; void legacyCost; void sourceState; void webhookState;

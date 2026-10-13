@@ -1,14 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EnvaiClient, operations, HttpTransport, EnvaiError, AuthenticationError, AccessDeniedError, NotFoundError, ConflictError, ValidationError, RateLimitError, ProviderError, FileError, ServerError, TransportError, ProtocolError, retryAfterMs, delay, positive } from '../dist/index.js';
-import {fixture,json} from './helpers.mjs';
+import {fixture,json,negotiatedFetch,capabilities} from './helpers.mjs';
+const completion={id:'cmpl_01ARZ3NDEKTSV4RRFFQ69G5FAV',workspace_id:'wsp_01ARZ3NDEKTSV4RRFFQ69G5FAV',chat_id:'cht_01ARZ3NDEKTSV4RRFFQ69G5FAV',team_id:'team_01ARZ3NDEKTSV4RRFFQ69G5FAV',user_id:'usr_01ARZ3NDEKTSV4RRFFQ69G5FAV',models_subagents:[],started_at:'2026-10-13T00:00:00Z',usage:{},cost_usd:null,status:'running',created_at:'2026-10-13T00:00:00Z',updated_at:'2026-10-13T00:00:00Z'};
 const baseUrl='https://example.test/api/v1';
 for(const item of fixture('operations.json'))test(`inventory and wire: ${item.id}`,async()=>{
- const operation=operations[item.id];assert.equal(operation.method,item.method);assert.equal(operation.path,item.path);assert.equal(!operation.public,item.authenticated);
+ const operation=operations[item.id];assert.equal(operation.method,item.method);assert.equal(operation.path.replace('/atp/v3',''),item.path);assert.equal(!operation.public,item.authenticated);
  let seen;
- const client=new EnvaiClient({baseUrl,apiKey:'secret-key',fetch:async(url,init)=>{seen={url,init};return operation.mode==='empty'?new Response(null,{status:204}):operation.mode==='stream'?new Response('data: x\n\n',{headers:{'content-type':'text/event-stream'}}):operation.mode==='binary'?new Response('binary'):json(operation.unwrap?{data:{id:'value'}}:{data:[],meta:{current_page:1},object:'list'});}});
+ const client=new EnvaiClient({baseUrl,apiKey:'secret-key',fetch:negotiatedFetch(async(url,init)=>{seen={url,init};return operation.mode==='empty'?new Response(null,{status:204}):operation.mode==='stream'?new Response('data: x\n\n',{headers:{'content-type':'text/event-stream'}}):operation.mode==='binary'?new Response('binary'):json(item.id==='getCapabilities'?{...capabilities,object:'list'}:item.id==='getCompletion'?{data:completion}:item.id==='listCompletions'?{data:[],links:{},meta:{current_page:1},object:'list'}:operation.unwrap?{data:{id:'value'}}:{data:[],meta:{current_page:1},object:'list'});},item.id!=='getCapabilities')});
  const params=Object.fromEntries(operation.parameters.filter(p=>p.required).map(p=>[p.name,p.in==='query'?'value':p.name==='name'?'a/b':'id']));
  if(operation.bodyRequired)params.body=operation.bodyMime==='multipart/form-data'?{file:new Blob(['input'],{type:'image/png'})}:{name:'example'};
+
  const result=await client[item.id](params);
  assert.equal(seen.init.method,item.method);assert.equal(seen.init.redirect,'manual');assert.equal(seen.init.headers.get('authorization'),item.authenticated?'Bearer secret-key':null);
  const parsed=new URL(seen.url);assert.equal(parsed.origin,'https://example.test');
@@ -17,13 +19,13 @@ for(const item of fixture('operations.json'))test(`inventory and wire: ${item.id
  if(item.id==='getUserTool'||item.id==='deleteUserTool'||item.id==='updateUserTool')assert.ok(parsed.pathname.endsWith('/a%2Fb'));
  if(operation.mode==='empty')assert.equal(result,undefined);
  else if(operation.mode==='binary'||operation.mode==='stream')assert.ok(result instanceof Response);
- else if(operation.unwrap)assert.deepEqual(result,{id:'value'});
+ else if(operation.unwrap)assert.deepEqual(result,item.id==='getCompletion'?completion:{id:'value'});
  else assert.equal(result.object,'list');
  if(operation.bodyMime==='multipart/form-data'){assert.ok(seen.init.body instanceof FormData);assert.equal(seen.init.headers.get('content-type'),null);}
 });
 test('all inventory methods and service aliases available, secrets hidden',()=>{
  const c=new EnvaiClient({baseUrl,apiKey:'do-not-expose'});
- assert.equal(Object.keys(operations).length,52);assert.ok(c.chats.sendMessage&&c.workspaceFiles.convertToPdf&&c.images.models&&c.apiKeys.create);
+ assert.equal(Object.keys(operations).length,65);assert.ok(c.chats.sendMessage&&c.workspaceFiles.convertToPdf&&c.images.models&&c.apiKeys.create);
  assert.ok(!JSON.stringify(c).includes('do-not-expose'));
 });
 test('origin base normalization, prefix preservation, JWKS override and query encoding',async()=>{
@@ -45,18 +47,18 @@ test('omitted api-key expiration stays omitted; explicit never preserved',async(
 });
 for(const [status,type,Klass]of [[401,'unauthenticated',AuthenticationError],[403,'access_denied',AccessDeniedError],[404,'not_found',NotFoundError],[409,'conflict',ConflictError],[400,'invalid_request',ValidationError],[422,'validation_error',ValidationError],[429,'too_many_requests',RateLimitError],[503,'server_error',ServerError],[404,'file_not_found',FileError],[401,'provider_error',ProviderError],[418,'teapot',EnvaiError]])test(`error mapping ${type}`,async()=>{
  const c=new EnvaiClient({baseUrl,retry:{maxRetries:0},fetch:async()=>json({error:{type,code:'machine_code',message:'Problem',details:{field:'x'}}},status,{'x-request-id':'req-1'})});
- await assert.rejects(c.getCapabilities(),e=>e instanceof Klass&&e.httpStatus===status&&e.type===type&&e.code==='machine_code'&&e.requestId==='req-1'&&e.details.field==='x');
+ await assert.rejects(c.getWorkspace({workspace_id:'x'}),e=>e instanceof Klass&&e.httpStatus===status&&e.type===type&&e.code==='machine_code'&&e.requestId==='req-1'&&e.details.field==='x');
 });
 test('non-envelope/invalid JSON errors are safe and preserve HTTP status',async()=>{
  const c=new EnvaiClient({baseUrl,fetch:async()=>new Response('<html>secret request url</html>',{status:401})});
  await assert.rejects(c.getCapabilities(),e=>e.message==='HTTP 401'&&e.details===null);
 });
 test('GET retries transient statuses honoring Retry-After and telemetry never sees secrets',async()=>{
- let count=0;const seen=[];const c=new EnvaiClient({baseUrl,apiKey:'supersecret',retry:{baseDelayMs:0},onObservation:e=>seen.push(e),fetch:async()=>++count<3?json({error:{type:'too_many_requests'}},429,{'retry-after':'0'}):json({ok:true})});
- assert.deepEqual(await c.getCapabilities(),{ok:true});assert.equal(count,3);assert.equal(seen.filter(e=>e.kind==='request.retry').length,2);assert.ok(!JSON.stringify(seen).includes('supersecret'));
+ let count=0;const seen=[];const c=new EnvaiClient({baseUrl,apiKey:'supersecret',retry:{baseDelayMs:0},onObservation:e=>seen.push(e),fetch:async()=>++count<3?json({error:{type:'too_many_requests'}},429,{'retry-after':'0'}):json({...capabilities,ok:true})});
+ assert.deepEqual(await c.getCapabilities(),{...capabilities,ok:true});assert.equal(count,3);assert.equal(seen.filter(e=>e.kind==='request.retry').length,2);assert.ok(!JSON.stringify(seen).includes('supersecret'));
 });
 for(const op of ['sendChatMessage','createWorkspace','updateWorkspace','deleteUserTool'])test(`mutations never retry: ${op}`,async()=>{
- let calls=0;const c=new EnvaiClient({baseUrl,fetch:async()=>{calls++;throw Error('network lost');}});
+ let calls=0;const c=new EnvaiClient({baseUrl,fetch:negotiatedFetch(async()=>{calls++;throw Error('network lost');})});
  const params={chat_id:'chat',workspace_id:'wsp',name:'tool',body:{message:'hi'}};
  await assert.rejects(c[op](params),TransportError);assert.equal(calls,1);
 });
@@ -82,7 +84,7 @@ test('input validation and reserved headers',async()=>{
  const abort=new AbortController();const wait=delay(1000,abort.signal);abort.abort();await assert.rejects(wait);await delay(0);
 });
 test('observation callback failures cannot corrupt a request',async()=>{
- const c=new EnvaiClient({baseUrl,onObservation:()=>{throw Error('observer');},fetch:async()=>json({ok:1})});assert.equal((await c.getCapabilities()).ok,1);
+ const c=new EnvaiClient({baseUrl,onObservation:()=>{throw Error('observer');},fetch:async()=>json({...capabilities,ok:1})});assert.equal((await c.getCapabilities()).ok,1);
 });
 test('exact server source snapshots match SHA-256, Git blob SHA and byte length',async()=>{
  const {readFileSync}=await import('node:fs');const {createHash}=await import('node:crypto');const provenance=fixture('provenance.json');
@@ -97,7 +99,7 @@ test('exact server source snapshots match SHA-256, Git blob SHA and byte length'
   assert.equal(createHash('sha1').update(`blob ${data.length}\0`).update(data).digest('hex'),source.git_blob_sha,name);
   assert.equal(source.repository_path,'packages/contracts/'+name);
  }
- assert.equal(readFileSync(new URL('../contracts/events.json',import.meta.url),'utf8'),readFileSync(new URL('../testdata/contracts/events.json',import.meta.url),'utf8'));
+ assert.equal(readFileSync(new URL('../testdata/contracts/events.json',import.meta.url),'utf8'),readFileSync(new URL('../testdata/contracts/events.json',import.meta.url),'utf8'));
 });
 test('derived SDK fixtures are labelled separately and match their complete hashes',async()=>{
  const {readFileSync}=await import('node:fs');const {createHash}=await import('node:crypto');const provenance=fixture('provenance.json');

@@ -5,7 +5,7 @@ import { HttpTransport, delay, positive, type RequestOptions } from './http.js';
 import { operations } from './operations.js';
 
 /** SSE wire parser: UTF-8 chunking, BOM, LF/CRLF/CR, comments and multi-line data. */
-export async function* parseSSE(body: ReadableStream<Uint8Array>, options: { signal?: AbortSignal; maxFrameBytes?: number; idleTimeoutMs?: number } = {}): AsyncGenerator<string> {
+export async function* parseSSE(body: ReadableStream<Uint8Array>, options: { signal?: AbortSignal; maxFrameBytes?: number; idleTimeoutMs?: number; requireTerminated?: boolean } = {}): AsyncGenerator<string> {
   const limit = positive(options.maxFrameBytes ?? 1_048_576, 'maxFrameBytes');
   const reader = body.getReader();
   const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -43,12 +43,17 @@ export async function* parseSSE(body: ReadableStream<Uint8Array>, options: { sig
           const frame = consumeLine(); if (frame !== undefined) yield frame;
         } else line += char;
       }
-      if (read.done) return; // Unterminated frames are discarded, as required by SSE.
+      if (read.done) {
+        if (options.requireTerminated && (line || sawData)) throw new ProtocolError('Truncated legacy SSE frame; nothing was delivered');
+        return; // Live SSE discards unterminated frames and recovers through its cursor.
+      }
     }
   } finally { options.signal?.removeEventListener('abort', abort); try { await reader.cancel(); } catch {} reader.releaseLock(); }
 }
 export interface StreamOptions extends RequestOptions {
   after?: number;
+  /** Contract 2 buffers and validates the entire finite replay before yielding; default 64 MiB of SSE wire bytes. */
+  maxLegacySnapshotBytes?: number;
   /** Explicit acknowledgement that an existing cursor belongs to this resident server runtime. */
   resume?: 'same-runtime';
   maxReconnects?: number; reconnectDelayMs?: number; idleTimeoutMs?: number; maxDurationMs?: number; maxFrameBytes?: number;
@@ -60,6 +65,8 @@ export class EventStream implements AsyncIterable<ATPEvent> {
     this.#lastSeq = options.after ?? 0;
     if (!Number.isSafeInteger(this.#lastSeq) || this.#lastSeq < 0) throw new RangeError('after must be a non-negative safe integer');
     if (this.#lastSeq > 0 && options.resume !== 'same-runtime') throw new ProtocolError('Nonzero resume requires resume: same-runtime; server cursors do not survive restart or eviction');
+    const snapshotLimit = positive(options.maxLegacySnapshotBytes ?? 64 * 1024 * 1024, 'maxLegacySnapshotBytes');
+    if (!Number.isSafeInteger(snapshotLimit)) throw new RangeError('maxLegacySnapshotBytes must be a safe integer');
     const reconnects = positive(options.maxReconnects ?? 5, 'maxReconnects', true);
     if (!Number.isInteger(reconnects)) throw new RangeError('maxReconnects must be an integer');
   }
@@ -83,17 +90,32 @@ export class EventStream implements AsyncIterable<ATPEvent> {
           if (!response.headers.get('content-type')?.toLowerCase().startsWith('text/event-stream')) { await response.body?.cancel(); throw new ProtocolError('Expected text/event-stream response'); }
           if (!response.body) throw new ProtocolError('SSE response has no body');
           this.transport.observe({ kind: 'stream.open', chatId: this.chatId, seq: this.#lastSeq });
-          for await (const frame of parseSSE(response.body, { signal, maxFrameBytes: this.options.maxFrameBytes, idleTimeoutMs: this.options.idleTimeoutMs ?? 45_000 })) {
-            const event = parseEvent(frame);
+          const legacy = this.transport.contractVersion === 2;
+          const snapshot: ATPEvent[] = [];
+          let snapshotBytes = 0, snapshotSeq = this.#lastSeq;
+          const body = legacy ? response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+            transform: (chunk, controller) => {
+              snapshotBytes += chunk.byteLength;
+              if (snapshotBytes > (this.options.maxLegacySnapshotBytes ?? 64 * 1024 * 1024)) throw new ProtocolError('Legacy replay exceeded maxLegacySnapshotBytes; nothing was delivered');
+              controller.enqueue(chunk);
+            },
+          })) : response.body;
+          for await (const frame of parseSSE(body, { signal, maxFrameBytes: this.options.maxFrameBytes, idleTimeoutMs: this.options.idleTimeoutMs ?? 45_000, requireTerminated: legacy })) {
+            const event = parseEvent(frame, this.transport.contractVersion);
             if (event.chat_id !== this.chatId) throw new ProtocolError('Event belongs to a different chat', event);
+            const cursor = legacy ? snapshotSeq : this.#lastSeq;
             if (event.type !== 'ping') {
-              if (event.seq <= this.#lastSeq) continue;
-              if (event.seq !== this.#lastSeq + 1) {
-                if (recoveringGap) throw new ReplayGapError(this.#lastSeq, event.seq);
+              if (event.seq <= cursor) {
+                if (legacy) throw new ProtocolError('Legacy replay contains a duplicate or backwards sequence; nothing was delivered');
+                continue;
+              }
+              if (event.seq !== cursor + 1) {
+                if (recoveringGap || legacy) throw new ReplayGapError(cursor, event.seq);
                 recoveringGap = true; sawGap = true; break;
               }
               recoveringGap = false;
             }
+            if (legacy) { snapshot.push(event); if (event.type !== 'ping') snapshotSeq = event.seq; continue; }
             this.transport.observe({ kind: 'event', eventType: event.type, eventId: event.id, seq: event.seq, chatId: event.chat_id, turnId: event.turn_id });
             const deliveredSeq = event.seq;
             const replayable = event.type !== 'ping';
@@ -101,8 +123,18 @@ export class EventStream implements AsyncIterable<ATPEvent> {
             // Advance only when control returns after the consumer successfully receives it.
             if (replayable) this.#lastSeq = deliveredSeq;
           }
+          if (legacy) {
+            for (const event of snapshot) {
+              signal.throwIfAborted();
+              this.transport.observe({ kind: 'event', eventType: event.type, eventId: event.id, seq: event.seq, chatId: event.chat_id, turnId: event.turn_id });
+              yield event;
+              if (event.type !== 'ping') this.#lastSeq = event.seq;
+            }
+            return; // Only a fully validated finite snapshot can expose events. Never reconnect.
+          }
         } catch (error) {
           signal.throwIfAborted();
+          if (this.transport.contractVersion === 2) throw error;
           if (error instanceof ProtocolError || error instanceof EnvaiError && ![429,502,503,504].includes(error.httpStatus)) throw error;
           if (reconnects >= maxReconnects) throw error;
         } finally { this.transport.observe({ kind: 'stream.close', chatId: this.chatId, seq: this.#lastSeq }); }

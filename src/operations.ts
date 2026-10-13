@@ -4,13 +4,18 @@ export const operations = {
   "sendChatMessage": {
     "id": "sendChatMessage",
     "method": "POST",
-    "path": "/chats/{chat_id}/messages",
+    "path": "/atp/v3/chats/{chat_id}/messages",
     "public": false,
     "origin": false,
     "parameters": [
       {
         "name": "chat_id",
         "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
         "required": true
       }
     ],
@@ -22,7 +27,7 @@ export const operations = {
   "streamChatEvents": {
     "id": "streamChatEvents",
     "method": "GET",
-    "path": "/chats/{chat_id}/events",
+    "path": "/atp/v3/chats/{chat_id}/events",
     "public": false,
     "origin": false,
     "parameters": [
@@ -35,6 +40,11 @@ export const operations = {
         "name": "after",
         "in": "query",
         "required": false
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
       }
     ],
     "bodyRequired": false,
@@ -44,13 +54,18 @@ export const operations = {
   "cancelChatTurn": {
     "id": "cancelChatTurn",
     "method": "POST",
-    "path": "/chats/{chat_id}/cancel",
+    "path": "/atp/v3/chats/{chat_id}/cancel",
     "public": false,
     "origin": false,
     "parameters": [
       {
         "name": "chat_id",
         "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
         "required": true
       }
     ],
@@ -61,13 +76,18 @@ export const operations = {
   "steerChatTurn": {
     "id": "steerChatTurn",
     "method": "POST",
-    "path": "/chats/{chat_id}/steer",
+    "path": "/atp/v3/chats/{chat_id}/steer",
     "public": false,
     "origin": false,
     "parameters": [
       {
         "name": "chat_id",
         "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
         "required": true
       }
     ],
@@ -79,13 +99,18 @@ export const operations = {
   "resolveChatTool": {
     "id": "resolveChatTool",
     "method": "POST",
-    "path": "/chats/{chat_id}/tool-output",
+    "path": "/atp/v3/chats/{chat_id}/tool-output",
     "public": false,
     "origin": false,
     "parameters": [
       {
         "name": "chat_id",
         "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
         "required": true
       }
     ],
@@ -97,13 +122,18 @@ export const operations = {
   "resolveChatApproval": {
     "id": "resolveChatApproval",
     "method": "POST",
-    "path": "/chats/{chat_id}/approval",
+    "path": "/atp/v3/chats/{chat_id}/approval",
     "public": false,
     "origin": false,
     "parameters": [
       {
         "name": "chat_id",
         "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
         "required": true
       }
     ],
@@ -115,13 +145,18 @@ export const operations = {
   "forkChat": {
     "id": "forkChat",
     "method": "POST",
-    "path": "/chats/{chat_id}/fork",
+    "path": "/atp/v3/chats/{chat_id}/fork",
     "public": false,
     "origin": false,
     "parameters": [
       {
         "name": "chat_id",
         "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
         "required": true
       }
     ],
@@ -133,13 +168,18 @@ export const operations = {
   "restoreChat": {
     "id": "restoreChat",
     "method": "POST",
-    "path": "/chats/{chat_id}/restore",
+    "path": "/atp/v3/chats/{chat_id}/restore",
     "public": false,
     "origin": false,
     "parameters": [
       {
         "name": "chat_id",
         "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
         "required": true
       }
     ],
@@ -151,10 +191,16 @@ export const operations = {
   "getCapabilities": {
     "id": "getCapabilities",
     "method": "GET",
-    "path": "/capabilities",
+    "path": "/atp/v3/capabilities",
     "public": false,
     "origin": false,
-    "parameters": [],
+    "parameters": [
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      }
+    ],
     "bodyRequired": false,
     "mode": "json",
     "unwrap": false
@@ -412,6 +458,11 @@ export const operations = {
         "name": "per_page",
         "in": "query",
         "required": false
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
       }
     ],
     "bodyRequired": false,
@@ -438,6 +489,11 @@ export const operations = {
       {
         "name": "completion_id",
         "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
         "required": true
       }
     ],
@@ -926,6 +982,351 @@ export const operations = {
       }
     ],
     "bodyMime": "application/json",
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": false
+  },
+  "uploadWikiSource": {
+    "id": "uploadWikiSource",
+    "method": "POST",
+    "path": "/workspaces/{workspace_id}/files/sources",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      }
+    ],
+    "bodyMime": "multipart/form-data",
+    "bodyRequired": true,
+    "mode": "json",
+    "unwrap": true
+  },
+  "getWikiSource": {
+    "id": "getWikiSource",
+    "method": "GET",
+    "path": "/workspaces/{workspace_id}/files/sources/{file_id}",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "file_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": true
+  },
+  "downloadWikiSource": {
+    "id": "downloadWikiSource",
+    "method": "GET",
+    "path": "/workspaces/{workspace_id}/files/sources/{file_id}/download",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "file_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "binary",
+    "unwrap": false
+  },
+  "withdrawWikiSource": {
+    "id": "withdrawWikiSource",
+    "method": "POST",
+    "path": "/workspaces/{workspace_id}/wiki/outbox/files",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      }
+    ],
+    "bodyMime": "application/json",
+    "bodyRequired": true,
+    "mode": "json",
+    "unwrap": true
+  },
+  "createWikiInboxRun": {
+    "id": "createWikiInboxRun",
+    "method": "POST",
+    "path": "/workspaces/{workspace_id}/wiki/inbox/runs",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      }
+    ],
+    "bodyMime": "application/json",
+    "bodyRequired": true,
+    "mode": "json",
+    "unwrap": true
+  },
+  "createWikiOutboxRun": {
+    "id": "createWikiOutboxRun",
+    "method": "POST",
+    "path": "/workspaces/{workspace_id}/wiki/outbox/runs",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      }
+    ],
+    "bodyMime": "application/json",
+    "bodyRequired": true,
+    "mode": "json",
+    "unwrap": true
+  },
+  "createWikiSyncRun": {
+    "id": "createWikiSyncRun",
+    "method": "POST",
+    "path": "/workspaces/{workspace_id}/wiki/syncs",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      }
+    ],
+    "bodyMime": "application/json",
+    "bodyRequired": true,
+    "mode": "json",
+    "unwrap": true
+  },
+  "getWikiOperation": {
+    "id": "getWikiOperation",
+    "method": "GET",
+    "path": "/workspaces/{workspace_id}/wiki/operations/{operation_id}",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "operation_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": true
+  },
+  "listWikiCategories": {
+    "id": "listWikiCategories",
+    "method": "GET",
+    "path": "/workspaces/{workspace_id}/wiki/categories",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": true
+  },
+  "getWikiCategoryIndex": {
+    "id": "getWikiCategoryIndex",
+    "method": "GET",
+    "path": "/workspaces/{workspace_id}/wiki/categories/{category_id}/index",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "category_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "from",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "to",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "all",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "type",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "catalog_revision",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": true
+  },
+  "getWikiWebhookJwks": {
+    "id": "getWikiWebhookJwks",
+    "method": "GET",
+    "path": "/.well-known/wiki-webhook-jwks.json",
+    "public": true,
+    "origin": true,
+    "parameters": [],
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": false
+  },
+  "streamChatEventsLegacy": {
+    "id": "streamChatEventsLegacy",
+    "method": "GET",
+    "path": "/chats/{chat_id}/events",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "chat_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "after",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": false
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "stream",
+    "unwrap": false
+  },
+  "getCapabilitiesLegacy": {
+    "id": "getCapabilitiesLegacy",
+    "method": "GET",
+    "path": "/capabilities",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": false
+      }
+    ],
     "bodyRequired": false,
     "mode": "json",
     "unwrap": false

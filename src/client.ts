@@ -2,6 +2,8 @@ import { GeneratedClient, type ChatMessageRequest, type ImageGenerationRequest }
 import { HttpTransport, delay, positive, type ClientOptions, type RequestOptions } from './http.js';
 import { EventStream, type StreamOptions } from './stream.js';
 import { isEvent, isTerminal } from './events.js';
+import { CompatibilityError } from './contract.js';
+import { WikiWebhookVerifier } from './wiki-webhooks.js';
 import { ProtocolError } from './errors.js';
 import type { ATPEvent, KnownEvent } from './event-types.js';
 import { ClientToolRunner, type ToolRunnerOptions } from './tools.js';
@@ -10,7 +12,7 @@ export interface TurnOptions extends StreamOptions { toolRunner?: ClientToolRunn
 export interface TurnResult {
   chatId: string; turnId: string; text: string; lastSeq: number;
   terminal: KnownEvent<'turn.completed' | 'turn.failed' | 'turn.cancelled'>;
-  usage: KnownEvent<'turn.completed'>['data']['usage']; cost: number;
+  usage: KnownEvent<'turn.completed'>['data']['usage']; cost: number | null;
 }
 export class EnvaiClient extends GeneratedClient {
   readonly jwks: JwksSource;
@@ -18,12 +20,16 @@ export class EnvaiClient extends GeneratedClient {
     super(new HttpTransport(options));
     this.jwks = options.jwksCache ?? new JwksCache(async signal => await this.getJwks({}, { signal }) as SigningJwks, options.jwksCacheTtlMs);
   }
+  createWikiWebhookVerifier(workspaceId: string): WikiWebhookVerifier {
+    return new WikiWebhookVerifier(new JwksCache(async signal => await this.getWikiWebhookJwks({}, { signal }) as SigningJwks), workspaceId);
+  }
   events(chatId: string, options: StreamOptions = {}): EventStream { return new EventStream(chatId, this.transport, options); }
   createToolRunner(options: Omit<ToolRunnerOptions, 'submit' | 'verifier' | 'onObservation'> & { verifier?: ToolRequestVerifier }): ClientToolRunner {
     return new ClientToolRunner({ ...options, verifier: options.verifier ?? new ToolRequestVerifier(this.jwks), submit: (chatId, body, requestOptions) => this.resolveChatTool({ chat_id: chatId, body }, requestOptions), onObservation: e => this.transport.observe(e) });
   }
   /** Open stream and wait for the first post-subscription ping BEFORE submitting the non-retryable message. */
   async *sendAndStream(chatId: string, message: ChatMessageRequest, options: TurnOptions = {}): AsyncGenerator<ATPEvent> {
+    if (this.transport.contractVersion !== 3) throw new CompatibilityError('Contract 2 cannot start a new turn');
     const controller = new AbortController();
     const signal = options.signal ? AbortSignal.any([controller.signal, options.signal]) : controller.signal;
     const stream = this.events(chatId, { ...options, signal });

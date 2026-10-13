@@ -8,3 +8,8 @@ export * from './stream.js';
 export * from './security.js';
 export * from './tools.js';
 export { operations } from './operations.js';
+export * from './contract.js';
+export * from './wiki.js';
+export * from './wiki-webhooks.js';
+export * from './wiki-inbox.js';
+export * from './legacy-event-types.js';

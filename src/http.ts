@@ -1,3 +1,4 @@
+import { CompatibilityError, validateResponse, type ContractVersion } from './contract.js';
 import { apiError, EnvaiError, ProtocolError, TransportError } from './errors.js';
 export type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 export interface RequestOptions { signal?: AbortSignal; headers?: HeadersInit; }
@@ -7,7 +8,9 @@ export interface Observation {
   eventType?: string; eventId?: string; seq?: number; chatId?: string; turnId?: string | null; callId?: string;
 }
 export interface ClientOptions {
-  apiKey?: string; baseUrl: string; jwksUrl?: string; fetch?: Fetch;
+  apiKey?: string; baseUrl: string;
+  /** Contract 2 permits only historical reads. Contract 3 is the default. */
+  contractVersion?: ContractVersion; jwksUrl?: string; fetch?: Fetch;
   requestTimeoutMs?: number; streamConnectTimeoutMs?: number;
   retry?: { maxRetries?: number; baseDelayMs?: number; maxDelayMs?: number };
   onObservation?: (event: Observation) => void;
@@ -37,10 +40,12 @@ export function retryAfterMs(header: string | null, now = Date.now()): number | 
   return Number.isFinite(result) ? Math.max(0, result) : undefined;
 }
 export class HttpTransport {
-  readonly baseUrl: string; readonly jwksUrl: string;
+  readonly baseUrl: string; readonly jwksUrl: string; readonly #contractVersion: ContractVersion;
   readonly #key?: string; readonly #fetch: Fetch; readonly #observe?: ClientOptions['onObservation'];
   readonly #timeout: number; readonly #connectTimeout: number; readonly #retries: number; readonly #baseDelay: number; readonly #maxDelay: number;
   constructor(options: ClientOptions) {
+    this.#contractVersion = options.contractVersion ?? 3;
+    if (this.contractVersion !== 2 && this.contractVersion !== 3) throw new TypeError('Unsupported contractVersion');
     const base = new URL(options.baseUrl);
     if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password || base.search || base.hash) throw new TypeError('baseUrl must be an HTTP(S) URL without credentials, query, or fragment');
     if (base.pathname === '/') base.pathname = '/api/v1';
@@ -56,26 +61,51 @@ export class HttpTransport {
     this.#baseDelay = positive(options.retry?.baseDelayMs ?? 250, 'baseDelayMs', true);
     this.#maxDelay = positive(options.retry?.maxDelayMs ?? 30_000, 'maxDelayMs', true);
   }
+  get contractVersion(): ContractVersion { return this.#contractVersion; }
+  async negotiate(options: RequestOptions = {}): Promise<void> {
+    if (this.contractVersion !== 3) throw new CompatibilityError('Contract 2 cannot start tracked work');
+    await this.request<unknown>({ id: 'negotiateContract', method: 'GET', path: '/atp/v3/capabilities', public: false, origin: false, parameters: [], bodyRequired: false, mode: 'json', unwrap: false }, {}, options);
+  }
   observe(event: Observation): void { try { this.#observe?.(Object.freeze({ ...event })); } catch { /* Telemetry cannot change protocol behavior. */ } }
   async request<T>(operation: Operation, params: object, options: RequestOptions = {}): Promise<T> {
     const values = params as Record<string, unknown>;
     let path = operation.path;
+    if (operation.id.endsWith('Legacy') && this.contractVersion !== 2) throw new CompatibilityError('Legacy operations require contractVersion: 2');
+    const atp = path.startsWith('/chats/') || path.startsWith('/atp/v3/') || path === '/capabilities';
+    const wiki = !operation.public && /\/(wiki|files\/sources)(\/|$)/.test(path);
+    const negotiated = atp || wiki || /\/completions(\/|$)/.test(path);
+    if (this.contractVersion === 2 && (wiki || operation.method !== 'GET')) throw new CompatibilityError('Contract 2 is historical read-only; wiki requires contract 3');
+    if (atp) path = this.contractVersion === 3 ? '/atp/v3' + path.replace(/^\/atp\/v3/, '') : path.replace(/^\/atp\/v3/, '');
     const query = new URLSearchParams();
     const headers = new Headers(options.headers);
     // Neither a hook nor per-call headers may overwrite credentials or smuggle an alternative host.
-    if (headers.has('authorization') || headers.has('host')) throw new TypeError('Reserved request header');
+    if (headers.has('authorization') || headers.has('host') || headers.has('x-envai-contract-version')) throw new TypeError('Reserved request header');
     for (const p of operation.id === 'downloadArtifact' ? [...operation.parameters].sort((a, b) => a.name.localeCompare(b.name)) : operation.parameters) {
-      const v = values[p.name];
+      const v = p.in === 'header' ? (p.name === 'Idempotency-Key' ? values.idempotencyKey ?? headers.get(p.name) : p.name === 'X-Envai-Contract-Version' ? this.contractVersion : headers.get(p.name)) : values[p.name];
       if (p.required && (v === undefined || v === null || v === '')) throw new TypeError(`Missing ${p.name}`);
       if (v === undefined || v === null) continue;
-      if (p.in === 'path') {
+      if (p.in === 'header') {
+        if (p.name === 'Idempotency-Key' && (typeof v !== 'string' || !/^[!-~]{1,255}$/.test(v))) throw new TypeError('Invalid Idempotency-Key');
+        if (p.name !== 'X-Envai-Contract-Version') headers.set(p.name, String(v));
+      } else if (p.in === 'path') {
         if (String(v) === '.' || String(v) === '..') throw new TypeError('Invalid path segment');
         path = path.replace(`{${p.name}}`, encodeURIComponent(String(v)));
       } else if (p.in === 'query') query.set(p.name, String(v));
     }
+    if (operation.id === 'getWikiCategoryIndex') {
+      const all = values.all === true;
+      if (all ? values.from !== undefined || values.to !== undefined : !Number.isSafeInteger(values.from) || !Number.isSafeInteger(values.to) || Number(values.from) < 1 || Number(values.to) < Number(values.from)) throw new TypeError('Choose all=true or inclusive positive from/to');
+      if (values.type !== undefined && values.type !== 'raw' && values.type !== 'artifact') throw new TypeError('Invalid category entry type');
+      if (values.catalog_revision !== undefined && (!Number.isSafeInteger(values.catalog_revision) || Number(values.catalog_revision) < 0)) throw new TypeError('Invalid catalog_revision');
+    }
+    if (operation.id === 'uploadWikiSource') {
+      const file = (values.body as { file?: unknown } | undefined)?.file;
+      if (!(file instanceof Blob) || file.size > 1_000_000_000) throw new TypeError('Source file must be a Blob of at most 1,000,000,000 bytes');
+    }
     if (operation.bodyRequired && values.body === undefined) throw new TypeError('Missing request body');
     let url = operation.id === 'getJwks' ? this.jwksUrl : operation.origin ? new URL(path, new URL(this.baseUrl).origin).href : this.baseUrl + path;
     if (query.size) url += (url.includes('?') ? '&' : '?') + query.toString();
+    if (negotiated) headers.set('X-Envai-Contract-Version', String(this.contractVersion));
     headers.set('accept', operation.mode === 'stream' ? 'text/event-stream' : operation.mode === 'binary' ? '*/*' : 'application/json');
     headers.set('user-agent', `envai-typescript/0.1.0-alpha.1 (node/${process.versions.node})`);
     if (!operation.public && this.#key) headers.set('authorization', `Bearer ${this.#key}`);
@@ -90,6 +120,7 @@ export class HttpTransport {
         headers.delete('content-type'); body = data;
       } else { headers.set('content-type', 'application/json'); body = JSON.stringify(values.body); }
     }
+    if (negotiated && operation.method !== 'GET') await this.negotiate(options);
     for (let attempt = 0; ; attempt++) {
       options.signal?.throwIfAborted();
       const controller = new AbortController();
@@ -103,17 +134,19 @@ export class HttpTransport {
         if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new ProtocolError('Redirect refused; credentials and signed URLs must not be forwarded'); }
         if (!response.ok) {
           let data: unknown; try { data = await response.json(); } catch { data = null; }
+          if (negotiated && (response.status === 426 || response.status === 404 && atp || (data as { error?: { code?: string } } | null)?.error?.code === 'unsupported_contract_version')) throw new CompatibilityError('Selected Envai contract is not supported by this server');
           throw apiError(response.status, data, response.headers.get('x-request-id'));
         }
+        if (negotiated && response.headers.get('X-Envai-Contract-Version') !== String(this.contractVersion)) { await response.body?.cancel(); throw new CompatibilityError('Missing or mismatched contract acknowledgment; mutation outcome may be unknown'); }
         if (operation.mode === 'stream' || operation.mode === 'binary') return response as T;
         if (operation.mode === 'empty' || response.status === 204) return undefined as T;
         let data: unknown;
         try { data = await response.json(); } catch { throw new ProtocolError('Invalid JSON response'); }
         if (operation.unwrap) {
           if (!data || typeof data !== 'object' || !('data' in data)) throw new ProtocolError('Missing resource data envelope', data);
-          return (data as { data: T }).data;
+          return validateResponse(operation.id, (data as { data: T }).data, this.contractVersion) as T;
         }
-        return data as T;
+        return validateResponse(operation.id, data, this.contractVersion) as T;
       } catch (error) {
         options.signal?.throwIfAborted();
         if (controller.signal.aborted) throw controller.signal.reason;

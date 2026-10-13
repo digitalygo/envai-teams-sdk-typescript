@@ -1,13 +1,15 @@
 // Generated from events.json. Do not edit.
-export type AtpEnvelope = { "v": 2; "id": string; "seq": number; "ts": string; "chat_id": string; "turn_id": (string | null); "agent": (AtpAgent | null); "type": string; "data": { [key: string]: unknown }; [key: string]: unknown };
+import type { LegacyAtpEnvelope, LegacyKnownEvent, LegacyEventType } from "./legacy-event-types.js";
+export type AtpEnvelope = { "v": 3; "id": string; "seq": number; "ts": string; "chat_id": string; "turn_id": (string | null); "agent": (AtpAgent | null); "type": string; "data": { [key: string]: unknown }; [key: string]: unknown };
 export type AtpAgent = { "instance_id": string; "name": string; "role": string; "parent_id": string | null; "model"?: string; [key: string]: unknown };
-export type AtpUsage = { "input_tokens": number; "output_tokens": number; "cost_usd": number; "duration_ms": number; "sprite_ms"?: number; "sprite_ram_gb_ms"?: number; "tool_calls"?: number; [key: string]: unknown };
+export type AtpUsage = { "input_tokens": number; "output_tokens": number; "cost_usd": number | null; "duration_ms": number; "sprite_ms"?: number; "sprite_ram_gb_ms"?: number; "tool_calls"?: number; "billing"?: AtpBillingState; "usage_cost"?: AtpUsageCost; [key: string]: unknown };
 export type AtpToolKind = "server" | "client" | "knowledge" | "code";
 export type AtpPing = {  };
+export type AtpChatTitleUpdated = { "title": string };
 export type AtpTurnStarted = { "turn_id": string; "input": string };
-export type AtpTurnCompleted = { "turn_id": string; "usage": AtpUsage; "cost": number; "chat_usage": AtpUsage; "chat_cost": number; "finish_reason": string };
-export type AtpTurnCancelled = { "turn_id": string; "reason": string; "usage": AtpUsage; "cost": number; "chat_usage": AtpUsage; "chat_cost": number };
-export type AtpTurnFailed = { "turn_id": string; "code": string; "message": string; "usage": AtpUsage; "cost": number; "chat_usage": AtpUsage; "chat_cost": number };
+export type AtpTurnCompleted = { "turn_id": string; "usage": AtpUsage; "cost": number | null; "chat_usage": AtpUsage; "chat_cost": number | null; "finish_reason": string; "billing"?: AtpBillingState; "usage_cost"?: AtpUsageCost };
+export type AtpTurnCancelled = { "turn_id": string; "reason": string; "usage": AtpUsage; "cost": number | null; "chat_usage": AtpUsage; "chat_cost": number | null; "billing"?: AtpBillingState; "usage_cost"?: AtpUsageCost };
+export type AtpTurnFailed = { "turn_id": string; "code": string; "message": string; "usage": AtpUsage; "cost": number | null; "chat_usage": AtpUsage; "chat_cost": number | null; "billing"?: AtpBillingState; "usage_cost"?: AtpUsageCost };
 export type AtpTurnSteered = { "turn_id": string; "text": string; "target_agent_id"?: string };
 export type AtpAgentStarted = { "name": string; "role": string; "model": string; "parent_id": string | null };
 export type AtpAgentPlan = { "plan": string };
@@ -31,8 +33,12 @@ export type AtpAgentFailed = { "code": string; "message": string };
 export type AtpApprovalRequest = { "approval_id": string; "origin_agent_id": string; "tool_name": string; "args": { [key: string]: unknown }; "reason": string; "deadline": string };
 export type AtpApprovalResponse = { "approval_id": string; "approve": boolean; "reason": string };
 export type AtpApprovalExpire = { "approval_id": string };
+export type AtpBillingState = { "status": "inactive"; [key: string]: unknown };
+export type AtpCurrencyAmount = { "currency": string; "amount": string; [key: string]: unknown };
+export type AtpUsageCost = ({ "status": "pending" | "complete"; "basis": "reported" | "calculated" | "mixed" | "none"; "scope_status": "open" | "closed"; "revision": number; "as_of": string; "invocation_count": number; "pending_invocation_count": number; "totals": (Array<AtpCurrencyAmount> | null); "priced_subtotals": Array<AtpCurrencyAmount>; [key: string]: unknown });
 export interface EventDataMap {
 "ping": AtpPing;
+"chat.title.updated": AtpChatTitleUpdated;
 "turn.started": AtpTurnStarted;
 "turn.completed": AtpTurnCompleted;
 "turn.cancelled": AtpTurnCancelled;
@@ -62,7 +68,7 @@ export interface EventDataMap {
 "approval.expire": AtpApprovalExpire;
 }
 export type EventType = keyof EventDataMap;
-export type KnownEvent<T extends EventType = EventType> = { [K in T]: AtpEnvelope & { known: true; type: K; data: EventDataMap[K] } }[T];
-export type UnknownEvent = AtpEnvelope & { known: false };
+export type KnownEvent<T extends EventType = EventType> = { [K in T]: AtpEnvelope & { known: true; type: K; data: EventDataMap[K] } }[T] | LegacyKnownEvent<Extract<T, LegacyEventType>>;
+export type UnknownEvent = (AtpEnvelope | LegacyAtpEnvelope) & { known: false };
 export type ATPEvent = KnownEvent | UnknownEvent;
-export const knownEventTypes = ["ping","turn.started","turn.completed","turn.cancelled","turn.failed","turn.steered","agent.started","agent.plan","agent.text.delta","agent.text.done","agent.reasoning.delta","agent.reasoning.done","agent.delegated","agent.tool.start","agent.tool.delta","agent.tool.complete","agent.tool.request","agent.tool.result","agent.escalate","agent.escalation.result","agent.artifact","agent.context.compacting","agent.context.compacted","agent.done","agent.failed","approval.request","approval.response","approval.expire"] as const;
+export const knownEventTypes = ["ping","chat.title.updated","turn.started","turn.completed","turn.cancelled","turn.failed","turn.steered","agent.started","agent.plan","agent.text.delta","agent.text.done","agent.reasoning.delta","agent.reasoning.done","agent.delegated","agent.tool.start","agent.tool.delta","agent.tool.complete","agent.tool.request","agent.tool.result","agent.escalate","agent.escalation.result","agent.artifact","agent.context.compacting","agent.context.compacted","agent.done","agent.failed","approval.request","approval.response","approval.expire"] as const;

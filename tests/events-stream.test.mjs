@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import { EnvaiClient, parseEvent, parseSSE, isEvent, isTerminal, knownEventTypes, ProtocolError, ReplayGapError, TransportError, AuthenticationError } from '../dist/index.js';
+import { EnvaiClient as RealEnvaiClient, parseEvent, parseSSE, isEvent, isTerminal, knownEventTypes, ProtocolError, ReplayGapError, TransportError, AuthenticationError } from '../dist/index.js';
 import {fixture,valid,event,chatId,turnId,bytes,sse,json,tick} from './helpers.mjs';
+import { negotiatedFetch } from './helpers.mjs';
+class EnvaiClient extends RealEnvaiClient { constructor(options) { super({...options,fetch:negotiatedFetch(options.fetch)}); } }
 const collect = async iterable => { const a=[];for await(const x of iterable)a.push(x);return a; };
 for(const e of valid)test('shared valid event: '+e.type,()=>{const parsed=parseEvent(JSON.stringify(e));assert.equal(parsed.type,e.type);assert.equal(parsed.known,knownEventTypes.includes(e.type));});
-for(const c of fixture('events-invalid.json'))test('shared invalid event: '+c.name,()=>assert.throws(()=>parseEvent(c.event),ProtocolError));
+for(const c of fixture('events-invalid.json'))test('shared invalid event: '+c.name,()=>assert.throws(()=>parseEvent(c.event,2),ProtocolError));
 test('unknown fields preserved without caller aliases; inconsistent turn and malformed JSON rejected',()=>{
  const source={...event('turn.started'),extra:{future:true}};const parsed=parseEvent(source);source.extra.future=false;assert.equal(parsed.extra.future,true);
  assert.throws(()=>parseEvent('{bad'),/Invalid SSE JSON/);assert.throws(()=>parseEvent(null),/Invalid ATP envelope/);assert.throws(()=>parseEvent(()=>{}),/not structured JSON/);
@@ -32,7 +34,7 @@ test('all 28 declared event types validate through full external-def schema',()=
  };
  for(const type of knownEventTypes){
   const variant=schema.$defs.Event.oneOf.find(v=>v.allOf?.[1]?.properties?.type?.const===type).allOf[1];
-  const e={...event('turn.started'),type,data:make(schema.$defs[type]),agent:make(variant.properties.agent)};
+  const e={...event('turn.started'),v:3,type,data:make(schema.$defs[type]),agent:make(variant.properties.agent)};
   if(type==='ping'){e.seq=0;e.turn_id=null;}
   if('turn_id'in e.data)e.data.turn_id=e.turn_id;
   assert.equal(parseEvent(e).type,type);
@@ -65,7 +67,7 @@ test('observable live gap heals through one replay and unrecoverable gap fails',
  }
 });
 test('stream HTTP auth failure is terminal; protocol errors are not retried',async()=>{
- for(const response of [()=>json({error:{type:'unauthenticated'}},401),()=>new Response('bad',{headers:{'content-type':'text/plain'}}),()=>sse([{...event('turn.started'),chat_id:'cht_01ARZ3NDEKTSV4RRFFQ69G5FAX'}]),()=>sse([{...event('turn.started'),v:3}]),()=>new Response(null,{headers:{'content-type':'text/event-stream'}})]){
+ for(const response of [()=>json({error:{type:'unauthenticated'}},401),()=>new Response('bad',{headers:{'content-type':'text/plain'}}),()=>sse([{...event('turn.started'),chat_id:'cht_01ARZ3NDEKTSV4RRFFQ69G5FAX'}]),()=>sse([{...event('turn.started'),v:4}]),()=>new Response(null,{headers:{'content-type':'text/event-stream'}})]){
   let calls=0;const c=new EnvaiClient({baseUrl:'https://test.invalid',fetch:async()=>{calls++;return response();}});
   await assert.rejects(collect(c.events(chatId,{reconnectDelayMs:0})));assert.equal(calls,1);
  }
