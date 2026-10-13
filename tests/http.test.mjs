@@ -89,15 +89,14 @@ test('exact server source snapshots match SHA-256, Git blob SHA and byte length'
  assert.equal(provenance.repository,'digitalygo/envai-teams');
  assert.equal(provenance.commit,'55275860c9a950eaad8e39e9d2b728149084779c');
  assert.equal(provenance.protocol_version,2);assert.equal(provenance.operations,52);
- assert.deepEqual(Object.keys(provenance.sources).sort(),['envai-api-sdk-foundation.md','events.json','openapi.yaml']);
+ assert.deepEqual(Object.keys(provenance.sources).sort(),['events.json','openapi.yaml']);
  for(const [name,source]of Object.entries(provenance.sources)){
   const data=readFileSync(new URL('../'+source.snapshot_path,import.meta.url));
   assert.equal(data.length,source.bytes,name);
   assert.equal(createHash('sha256').update(data).digest('hex'),source.sha256,name);
   assert.equal(createHash('sha1').update(`blob ${data.length}\0`).update(data).digest('hex'),source.git_blob_sha,name);
-  assert.equal(source.repository_path,name==='envai-api-sdk-foundation.md'?'docs/'+name:'packages/contracts/'+name);
+  assert.equal(source.repository_path,'packages/contracts/'+name);
  }
- assert.equal(provenance.sources['envai-api-sdk-foundation.md'].sha256,'090e58738a02578b04123ab2e45b6e30d839361c0c91ba9bc019c2f19781f3e2');
  assert.equal(readFileSync(new URL('../contracts/events.json',import.meta.url),'utf8'),readFileSync(new URL('../testdata/contracts/events.json',import.meta.url),'utf8'));
 });
 test('derived SDK fixtures are labelled separately and match their complete hashes',async()=>{

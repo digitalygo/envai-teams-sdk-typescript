@@ -2,14 +2,21 @@
 
 A Node.js 22+ ESM client for the current Envai Teams **alpha** API. It includes typed primitives for all **52 HTTP operations**, all **28 ATP v2 event types**, async SSE streams, turn helpers, and opt-in signed client tools.
 
-**Status:** initial alpha implementation; package publication, deployment, and production API calls are outside this change. This SDK does not remove the server limitations described below.
+**Status:** alpha source distribution. Use a reviewed commit for reproducible builds. API compatibility limits are described below.
+
+- [Installation and configuration](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/getting-started.md)
+- [API and models](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-reference.md) · [all 52 operations](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-inventory.md)
+- [Streaming and recovery](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/streaming.md)
+- [Client-tool safety and deployment](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/client-tools.md)
 
 ## Install and verify from source
 
 ```sh
+git clone --branch alpha https://github.com/digitalygo/envai-teams-sdk-typescript.git
+cd envai-teams-sdk-typescript
 npm ci --ignore-scripts
-npm run check
-npm run check:package
+npm run build
+npm pack
 ```
 
 The package name is `@digitalygo/envai-client`. No registry release is assumed. After building, a local `npm pack` archive can be installed into an application. This is a Node-only ESM package; it does not claim browser or CommonJS compatibility.
@@ -20,7 +27,7 @@ The package name is `@digitalygo/envai-client`. No registry release is assumed. 
 import { EnvaiClient } from '@digitalygo/envai-client';
 
 const client = new EnvaiClient({
-  baseUrl: 'http://localhost:8111/api/v1',
+  baseUrl: 'https://api.example.com/api/v1',
   apiKey: process.env.ENVAI_API_KEY,
 });
 
@@ -32,11 +39,14 @@ const chat = await client.chats.create({
 });
 const result = await client.sendAndWait(chat.id, { message: 'Hello!' });
 console.log(result.text, result.terminal.type, result.lastSeq);
+if (result.terminal.type !== 'turn.completed') {
+  throw new Error(`Turn ended with ${result.terminal.type}`);
+}
 ```
 
-Provide your own credentials and existing team ID. The constructor reads no environment variables and makes no network calls. A base URL containing only an origin gets `/api/v1`; an explicit path is treated as the complete API prefix. Trailing slashes are removed. Use the edge URL for the combined API, not the execution-plane-only gateway on port 8081.
+Provide your own credentials and existing team ID. The constructor reads no environment variables and makes no network calls. A base URL containing only an origin gets `/api/v1`; an explicit path is treated as the complete API prefix. Trailing slashes are removed. Use your deployment’s public API URL and HTTPS in production. HTTP is accepted for local development and is not automatically upgraded to HTTPS.
 
-See [typed quickstart](examples/quickstart.ts), [client tools](examples/client-tools.ts), and the [durable-store adapter example](examples/postgres-tool-store.ts). Examples are typechecked. The PostgreSQL adapter is also exercised with an in-memory SQL test double; tests and CI never connect to a database.
+See [typed quickstart](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/examples/quickstart.ts), [client tools](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/examples/client-tools.ts), and the [durable-store adapter example](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/examples/postgres-tool-store.ts). Examples are typechecked. The PostgreSQL adapter is also exercised with an in-memory SQL test double; tests and CI never connect to a database.
 
 ## API and generated types
 
@@ -48,11 +58,11 @@ Every OpenAPI `operationId` is a public method, for example `client.sendChatMess
 - `204` responses return `undefined`. Binary downloads and the low-level `streamChatEvents`/`chats.eventsResponse` return a `Response`, allowing streaming via `response.body` without buffering the whole file.
 - Image uploads accept `{ body: { file: new Blob([...], { type: 'image/png' }) } }`. Fetch generates the multipart boundary.
 - Optional provider webhook signature headers go in `RequestOptions.headers`. The webhook primitive is exposed for complete contract coverage; the SDK never calls it automatically.
-- `downloadArtifact` takes current signed `artifact`, `generation`, optional `expires`, and `signature` query fields, in Laravel's canonical alphabetical order, without a bearer token. It does not accept the historical `path` parameter. Do not log signed URLs.
+- `downloadArtifact` takes current signed `artifact`, `generation`, optional `expires`, and `signature` query fields, in canonical alphabetical order, without a bearer token. It does not accept the historical `path` parameter. Do not log signed URLs.
 - API-key creation preserves omitted `expires_at` (server default) versus explicit `"never"`.
 - Completion `page` is absent from the pinned request contract, although the response is paginated. This SDK preserves the declared parameters and metadata; it does not invent an automatic page traversal API.
 
-[Complete operation inventory](docs/api-inventory.md) and generated `*Params`/`*Result` types document the full surface. Authentication headers and host overrides cannot be supplied through per-call headers.
+[Complete operation inventory](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-inventory.md) and generated `*Params`/`*Result` types document the full surface. Authentication headers and host overrides cannot be supplied through per-call headers.
 
 ## Streaming and turns
 
@@ -69,7 +79,7 @@ for await (const event of client.sendAndStream(chat.id, { message: 'Explain it' 
 }
 ```
 
-`sendAndStream` opens the SSE reader and waits for the first `ping` before it sends the message. HTTP 200 alone is not proof of a registered live subscription on alpha. Readiness has a 30-second default timeout. Message submission is never automatically retried.
+`sendAndStream` opens the SSE reader and waits for the first `ping` before it sends the message. HTTP 200 alone does not establish live readiness. Readiness has a 30-second default timeout. Message submission is never automatically retried.
 
 `sendAndWait` returns orchestrator-only text, the terminal event, usage, server cost, chat/turn IDs, and the terminal sequence. `agent.text.done` replaces accumulated orchestrator deltas. Subagent and reasoning content is excluded. A failed or cancelled turn returns its typed terminal event so callers must inspect `terminal.type`.
 
@@ -127,17 +137,17 @@ Handlers receive an `AbortSignal` and a stable idempotency key. Concurrency defa
 
 Local tool schemas default to JSON Schema 2020-12. Explicit `$schema` declarations support drafts 6, 7, 2019-09 and 2020-12 using their standard meta-schema URIs; unsupported dialects fail registration. Each dialect uses the appropriate Ajv compiler, including draft-7 `dependencies`/tuple `items` and modern `dependentRequired`/`prefixItems`. Nested `const` and `enum` objects remain literal JSON values. Registration does no network I/O.
 
-Unknown tools, invalid arguments, handler errors, empty output, and oversized output generate controlled errors. Structured output is JSON-serialized once; the 128 KiB bound is measured in UTF-8 bytes. Empty string output is rejected by the current gateway despite the schema omitting `minLength`, so the runner converts it to `empty_output`.
+Unknown tools, invalid arguments, handler errors, empty output, and oversized output generate controlled errors. Structured output is JSON-serialized once; the 128 KiB bound is measured in UTF-8 bytes. Empty string output is rejected by the current API despite the schema omitting `minLength`, so the runner converts it to `empty_output`.
 
 ### Durable state and reconciliation
 
-`ToolStateStore` is intentionally mandatory. For production side effects, implement atomic, durable `claim`, `get`, and conditional `transition` operations across all application processes. Use a stable, non-secret deployment/account `scope`. The [Postgres adapter example](examples/postgres-tool-store.ts) accepts a caller-owned database connection; table creation and credentials are never automatic.
+`ToolStateStore` is intentionally mandatory. For production side effects, implement atomic, durable `claim`, `get`, and conditional `transition` operations across all application processes. Use a stable, non-secret deployment/account `scope`. The [Postgres adapter example](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/examples/postgres-tool-store.ts) accepts a caller-owned database connection; table creation and credentials are never automatic.
 
-The state machine is `claimed → completed → submitted → resolved`, with `ambiguous` and `abandoned` branches. A matching server result creates a durable resolved tombstone even if its request was never seen. Terminal events create durable per-turn admission barriers, including when signature verification or storage operations are still in flight. Claims precede handler effects; all existing calls are skipped on replay. Store failures fail closed. `get` must return `undefined` only for an absent key; malformed JSON, JSON `null`, invalid shapes/states, mismatched call/turn identities, and invalid saved output must raise an error without overwriting the stored record. The runner validates every record it reads and reports `invalid_tool_state` for corrupt values. Adapters must use `assertToolRecord` and atomically preserve valid identity during mutations. The PostgreSQL example validates the complete row, rejects duplicate-row reads from an incorrectly restored table, and uses a compare-and-swap update, so a concurrent change cannot be overwritten. A failed transition to `completed`, including a missing claim after the handler returns, prevents output submission. These checks address pre-existing local storage corruption, not a remotely exploitable storage-write path.
+The state machine is `claimed → completed → submitted → resolved`, with `ambiguous` and `abandoned` branches. A matching server result creates a durable resolved tombstone even if its request was never seen. Terminal events create durable per-turn admission barriers, including when signature verification or storage operations are still in flight. Claims precede handler effects; all existing calls are skipped on replay. Store failures fail closed. `get` must return `undefined` only for an absent key; malformed JSON, JSON `null`, invalid shapes/states, mismatched call/turn identities, and invalid saved output must raise an error without overwriting the stored record. The runner validates every record it reads and reports `invalid_tool_state` for corrupt values. Adapters must use `assertToolRecord` and atomically preserve valid identity during mutations. The PostgreSQL example validates the complete row, rejects duplicate-row reads from an incorrectly restored table, and uses a compare-and-swap update, so a concurrent change cannot be overwritten. A failed transition to `completed`, including a missing claim after the handler returns, prevents output submission. Protect database permissions and backups; validation cannot make an attacker-controlled store trustworthy.
 
 Never expire, steal, delete, or re-execute a claim automatically. A crash between an external side effect and saving its result is inherently ambiguous. Reconcile using your own transactional/idempotent downstream operation. Persisted output may contain sensitive information: protect the store appropriately. The SDK never persists API keys, arguments, or signature material in the state store.
 
-There is no automatic tool-output resubmission. A dropped response, `409 tool_already_resolved`, `409 tool_timed_out`, or `404` after turn cleanup is not proof of successful delivery. The record remains ambiguous until the corresponding `agent.tool.result` is observed or your application reconciles it. `drain()` exposes job failures through an `AggregateError`. Feed server result and terminal events to the same runner, even if you do not want to execute requests from that stream. A signature establishes origin and integrity, not freshness; callers must not replay arbitrary historical requests as fresh work.
+There is no automatic tool-output resubmission. A dropped response, `409 tool_already_resolved`, `409 tool_timed_out`, or `404` after turn cleanup is not proof of successful delivery. The record remains ambiguous until the corresponding `agent.tool.result` is observed or your application reconciles it. `drain()` exposes job failures through an `AggregateError`. Feed server result and terminal events to the same runner, even if you do not want to execute requests from that stream. A signature authenticates the call ID, tool name, and canonical arguments. It does not sign the chat, turn, account, timestamp, or freshness. Only feed trusted authenticated stream events to the runner; never treat arbitrary historical requests as fresh work.
 
 ## Transport, errors, and observation
 
@@ -151,23 +161,22 @@ Only GETs retry automatically: transient transport failures and 429/502/503/504,
 
 ## Current alpha limitations
 
-This package is pinned to `digitalygo/envai-teams` commit `55275860c9a950eaad8e39e9d2b728149084779c`, API 2.0.0, ATP v2. Source hashes are in `contracts/manifest.json`.
+The bundled contracts describe API 2.0.0 and ATP v2. Exact source hashes are in `contracts/manifest.json`; using this SDK does not require access to another repository.
 
-- Replay has 10,000 in-memory events, no durable epoch, no cursor-expired response, and sequence reset after eviction/restart. A reused cursor can silently receive an incomplete tail or only pings. Gap checks cannot detect every reset. Resume is best-effort **within the same resident runtime**; require an application reconciliation policy after known eviction/restart.
+- Replay is best-effort, with no durable epoch or cursor-expired response, and sequences can reset after eviction/restart. A reused cursor can silently receive an incomplete tail or only pings. Gap checks cannot detect every reset. Resume is best-effort **within the same resident runtime**; require an application reconciliation policy after known eviction/restart.
 - Replay and live subscription are not atomic. Waiting for the first post-subscription ping reduces the new-turn attach race; it cannot restore already lost events or guarantee every interleaving. Subscriber overflow can silently drop events; observable upward gaps trigger recovery.
-- Capabilities currently advertises 17 emitted events and six features. The schema's 28 declared events remain valid; capabilities is feature discovery, not a parser allowlist.
-- `steer` validates and emits `turn.steered`, but currently does not inject text into the LLM loop. Do not treat its HTTP acknowledgment as an execution change.
-- Approval resolution is a `409` stub. The primitive/types are exposed, but no automatic approval workflow exists.
-- Context hydration is fail-open; persistence is asynchronous and best-effort. The SDK cannot promise full history after hydration. Resident chat usage totals reset and are not durable billing records.
+- Capabilities is positive feature discovery, not a parser allowlist. All 28 declared event types remain valid even when discovery lists fewer events.
+- A successful `steer` acknowledgement does not guarantee changed execution.
+- Approval resolution currently responds with HTTP 409 and is unavailable as a completed workflow. The primitive preserves that error.
+- Context restore is best-effort. A restore acknowledgement does not guarantee complete or durable history. Reported chat usage can reset and is not a durable billing record.
 - Fork requires a separately created empty destination chat in the same owner/workspace, with both chats idle. Restore returns `turn_id: null` and does not start a turn.
 - Completion pagination omits the `page` request parameter in this contract; empty tool output lacks a schema minimum although the gateway rejects it.
 
-Advanced PHP definitions/CLI/synchronization parity is deliberately outside this V1.
 
 ## Development and provenance
 
-`npm run generate` deterministically regenerates 86 HTTP models, request/response types, operation primitives, and 28 event payload types from both pinned contracts. SSE, cryptography, tools, and helpers remain handwritten. `npm run check:generated` fails on drift without rewriting files. The exact server source contracts and foundation document are preserved with hash provenance in `testdata/contracts/provenance.json`. `sources` identifies each pinned repository path, local snapshot, byte count, SHA-256 and Git blob SHA. `generated_fixtures` separately identifies SDK-authored conformance cases and the generated OpenAPI JSON; these are not presented as raw server files. Tests verify every source and derived-file hash, including the foundation snapshot, without exclusions.
+`npm run generate` deterministically regenerates 86 HTTP models, request/response types, operation primitives, and 28 event payload types from both pinned contracts. SSE, cryptography, tools, and helpers remain handwritten. `npm run check:generated` fails on drift without rewriting files. The two byte-exact HTTP/event contract snapshots have provenance in `testdata/contracts/provenance.json`. `sources` preserves their original commit/path, byte count, SHA-256 and Git blob SHA. `generated_fixtures` separately identifies SDK-authored conformance cases and generated OpenAPI JSON. Public guides are SDK documentation, not copied contract sources. Tests verify every retained source and fixture hash.
 
-Tests make no live Envai requests and need no credentials. CI typechecks the runtime and examples, verifies generation, tests all 52 operations plus schema/SSE/signature/state-machine conformance, enforces at least 95% line/function and 90% branch coverage, and smoke-tests the packed archive on Node 22 and 24. Contract fixtures include public RFC 8032 test-key material only; no private key or credential is shipped.
+Tests make no live Envai requests and need no credentials. CI typechecks the runtime and examples, verifies generation, tests all 52 operations plus schema/SSE/signature/state-machine conformance, enforces at least 95% line/function and 90% branch coverage, and smoke-tests the packed archive on Node 22 and 24. Signature fixtures use public RFC 8032 test-key material only, never account credentials or production signing keys.
 
 MIT, copyright 2026 DigItalyGo. Existing license text is preserved.

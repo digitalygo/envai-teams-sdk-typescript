@@ -5,3 +5,5 @@ coverage/
 .env
 
 .package-smoke-*/
+.example-build/
+.examples-test-*/

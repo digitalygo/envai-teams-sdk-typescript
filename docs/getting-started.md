@@ -1,0 +1,63 @@
+# Installation and configuration
+
+[README](../README.md) · [API reference](api-reference.md) · [Streaming](streaming.md) · [Client tools](client-tools.md)
+
+## Build from public source
+
+Requires Node.js 22 or newer and npm. This is an ESM package for Node.js; browser and CommonJS support are not claimed. Use a supported, patched Node release.
+
+```sh
+git clone --branch alpha https://github.com/digitalygo/envai-teams-sdk-typescript.git
+cd envai-teams-sdk-typescript
+npm ci --ignore-scripts
+npm run build
+npm pack
+```
+
+The package name is `@digitalygo/envai-client`. Install the `.tgz` filename printed by `npm pack` into your application with `npm install /absolute/path/to/that-file.tgz`. Use the actual filename rather than assuming a version. The source-install path does not require a published npm registry package. Check out a reviewed commit before building for reproducible use.
+
+The packed package contains runtime code, TypeScript declarations, contract schemas, README, and license. Full source guides and runnable examples are in this GitHub repository. In your application, import from `@digitalygo/envai-client`; the repository examples import local source so they can be typechecked together.
+
+## Configure a client
+
+`new EnvaiClient(options)` makes no network call and does not read environment variables. Supply a trusted `baseUrl` and `apiKey` explicitly. An origin-only URL gets `/api/v1`; an explicit path is the complete API prefix. Do not include URL credentials, query, or fragment. Use HTTPS in production; HTTP is accepted for intentional local development and is not upgraded automatically.
+
+| Option | Default / behavior |
+| --- | --- |
+| `baseUrl` | Required trusted API URL. |
+| `apiKey` | Explicit bearer key for authenticated operations; omitted on public/signed operations. |
+| `jwksUrl` | Origin-level `/.well-known/jwks.json`; override only with a trusted signing-key endpoint. |
+| `requestTimeoutMs` | 30,000 ms for ordinary request/JSON-body handling. |
+| `streamConnectTimeoutMs` | 15,000 ms. |
+| `retry` | Two eligible GET retries, 250 ms base delay, 30,000 ms maximum delay. |
+| `fetch` | Native Fetch by default; supply a compatible implementation for mocks/routing. It must honor signals and manual redirects. |
+| `onObservation` | Structural lifecycle/ID/status events, excluding bodies and secrets. |
+| `jwksCacheTtlMs` | Five-minute cache; `jwksCache` may supply an application-owned `JwksSource`. |
+
+Never commit API keys, log signed artifact URLs, or expose private `ProtocolError.raw` data indiscriminately. Reuse the client and provide an `AbortSignal` for bounded workflows and caller-managed binary reads.
+
+## Run the examples
+
+From the repository checkout, compile examples with the existing TypeScript configuration:
+
+```sh
+npm run typecheck
+npx --no-install tsc -p tsconfig.examples.json --noEmit false --outDir .example-build
+node -e "require('node:fs').cpSync('contracts', '.example-build/contracts', { recursive: true })"
+node .example-build/examples/quickstart.js
+```
+
+Before running, set `ENVAI_BASE_URL`, `ENVAI_API_KEY`, and an existing `ENVAI_TEAM_ID`. The quickstart creates a workspace/chat and sends a real, potentially billable turn. It prints the terminal status and does not delete the created resources. Ctrl-C stops local work; it does not implicitly cancel the remote turn.
+
+For the harmless echo handler, additionally set `ENVAI_CHAT_ID` and `ENVAI_ACCOUNT_SCOPE`, configure the remote tool/agent as described in [client tools](client-tools.md), then run `node .example-build/examples/client-tools.js`. `ENVAI_REGISTER_TOOLS=1` explicitly opts into first-time remote tool creation. Leave it unset for an already registered tool. The example memory store is not suitable for production side effects.
+
+The PostgreSQL adapter is a library example; supply your own reviewed migration and database connection. No database is created automatically, and CI uses a SQL test double rather than a live database.
+
+## Offline verification
+
+```sh
+npm run check
+npm run check:package
+```
+
+The suite verifies generated files, types, HTTP operations, schemas, SSE, signatures, state transitions, examples, coverage, and a packed-package import. Tests do not contact an Envai deployment or use account credentials. The example tests replace Fetch with offline responses. This verifies client behavior, not your deployment's availability or feature configuration.
