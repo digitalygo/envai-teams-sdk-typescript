@@ -1,6 +1,6 @@
 {
   "name": "@digitalygo/envai-client",
-  "version": "0.1.0-alpha.1",
+  "version": "1.0.0-alpha.1",
   "description": "Typed Node.js client for Envai Teams HTTP and ATP v2",
   "license": "MIT",
   "type": "module",
