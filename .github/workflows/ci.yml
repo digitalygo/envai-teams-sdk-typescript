@@ -2,12 +2,12 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [alpha, 'sdk/**']
+    branches: [dev, alpha, beta, main, 'sdk/**']
 permissions:
   contents: read
 concurrency:
   group: sdk-typescript-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   test:
     name: Node ${{ matrix.node }}
@@ -18,6 +18,8 @@ jobs:
         node: [22, 24]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
@@ -25,3 +27,29 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run check
       - run: npm run check:package
+
+  release-checks:
+    name: Release tooling
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts --prefix .github/release-tools
+      - run: node .github/release-tools/patch-semantic-release.mjs
+      - run: npm test --prefix .github/release-tools
+      - run: npm audit --audit-level=high --prefix .github/release-tools
+
+  release:
+    needs: [test, release-checks]
+    if: github.event_name == 'push' && contains(fromJSON('["dev", "alpha", "beta", "main"]'), github.ref_name)
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    secrets:
+      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+      KCHAT_WEBHOOK_URL: ${{ secrets.KCHAT_WEBHOOK_URL }}
