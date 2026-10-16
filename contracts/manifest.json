@@ -1,21 +1,21 @@
 {
   "repository": "digitalygo/envai-teams",
-  "commit": "c27963d0848540679bccf30d2aeab354097b1a38",
+  "commit": "6a4e45bafe6f5856ef92a57b37db08769738b412",
   "apiVersion": "3.0.0",
   "atpVersion": 3,
-  "operationCount": 65,
+  "operationCount": 71,
   "sources": {
     "openapi.yaml": {
       "repository_path": "packages/contracts/openapi.yaml",
-      "bytes": 219604,
-      "sha256": "d6c62be0cc562c1d4ab7c00261b46958a5fcd8fa414cbb99a2d2fc7770a4fd14",
-      "git_blob_sha": "7ea7d8d9e4f175ba285ca05227147d2de5ee41a4"
+      "bytes": 233072,
+      "sha256": "af736ba76d9673f34eac453e725fe57acb4517f6faf660bb8aed43465c7a0245",
+      "git_blob_sha": "347a58fa0ce76dc43a9f2c4ff94661ff0fe3cbf8"
     },
     "events.json": {
       "repository_path": "packages/contracts/events.json",
-      "bytes": 51786,
-      "sha256": "853704fc39c1538825921c1a55f25e61ce8140e64d95a70a3add2548423be702",
-      "git_blob_sha": "514c16c00fe7d489e04f4284d99474da0fd1834b"
+      "bytes": 52694,
+      "sha256": "609628f9a9eb59b9169f20ec7f1edf167a27d449d23b9c2697a17f50811db1e9",
+      "git_blob_sha": "5f971112cb99535bff366bcfa36def7f8dfa7e7d"
     },
     "events-v2.json": {
       "repository_path": "packages/contracts/events-v2.json",
@@ -25,9 +25,9 @@
     },
     "wiki.json": {
       "repository_path": "packages/contracts/wiki.json",
-      "bytes": 18820,
-      "sha256": "e7a41ff28309539c47fe19ad882342f2d20fffee7705c3724968ca4889238f6a",
-      "git_blob_sha": "d1fcb97738ebf58b95b39e06660c74959a8d290b"
+      "bytes": 18844,
+      "sha256": "94d25f2f2d7bfacee9544cd614cb86baaf1d952be1b714badb38b7a98a8e636f",
+      "git_blob_sha": "2a2b1af96c99db7d072a3c766426fa493e881cb0"
     },
     "terminal-snapshot.json": {
       "repository_path": "packages/contracts/terminal-snapshot.json",
@@ -36,11 +36,46 @@
       "git_blob_sha": "77d885bda661800972ed56837e69a57ab613da82"
     }
   },
+  "derived_artifacts": {
+    "openapi.json": {
+      "snapshot_path": "contracts/openapi.json",
+      "source_repository_path": "packages/contracts/openapi.yaml",
+      "origin": "Generated JSON representation of the pinned OpenAPI YAML; not an upstream repository file.",
+      "bytes": 310249,
+      "sha256": "935a345e243b6cd9710d918b4e8c354ab131df3b997be4973625173ab641e5cd"
+    }
+  },
+  "shared_fixtures": {
+    "failed.json": {
+      "snapshot_path": "testdata/chat-attachments/failed.json",
+      "repository_path": "packages/contracts/fixtures/chat-attachments/failed.json",
+      "origin": "Shared synthetic conformance fixture copied from the pinned server commit; not captured provider traffic.",
+      "sha256": "b6a8108c83b5a685e32303e839f9c99bff766c0728b6236a3925bf6841bdea4d"
+    },
+    "pending.json": {
+      "snapshot_path": "testdata/chat-attachments/pending.json",
+      "repository_path": "packages/contracts/fixtures/chat-attachments/pending.json",
+      "origin": "Shared synthetic conformance fixture copied from the pinned server commit; not captured provider traffic.",
+      "sha256": "eeff5302d851d135b4adaa9a1dde2fb9dd2ebc9fe30b80b5287e03f1314eea32"
+    },
+    "ready.json": {
+      "snapshot_path": "testdata/chat-attachments/ready.json",
+      "repository_path": "packages/contracts/fixtures/chat-attachments/ready.json",
+      "origin": "Shared synthetic conformance fixture copied from the pinned server commit; not captured provider traffic.",
+      "sha256": "cc6148ab1dec7af7b73ae8fc5c9d59289b67ddfe5a749cf94f86a990d9459ee8"
+    },
+    "recoverable.json": {
+      "snapshot_path": "testdata/chat-attachments/recoverable.json",
+      "repository_path": "packages/contracts/fixtures/chat-attachments/recoverable.json",
+      "origin": "Shared synthetic conformance fixture copied from the pinned server commit; not captured provider traffic.",
+      "sha256": "aafd4a86f9ba4c4914993e55c587f2e9c24c52270559729478858213114f379d"
+    }
+  },
   "sha256": {
-    "openapi.yaml": "d6c62be0cc562c1d4ab7c00261b46958a5fcd8fa414cbb99a2d2fc7770a4fd14",
-    "events.json": "853704fc39c1538825921c1a55f25e61ce8140e64d95a70a3add2548423be702",
+    "openapi.yaml": "af736ba76d9673f34eac453e725fe57acb4517f6faf660bb8aed43465c7a0245",
+    "events.json": "609628f9a9eb59b9169f20ec7f1edf167a27d449d23b9c2697a17f50811db1e9",
     "events-v2.json": "88d41835f88c0cc4ad071b06ed4623882c6b64144baf312c4a095504c98cd7d6",
-    "wiki.json": "e7a41ff28309539c47fe19ad882342f2d20fffee7705c3724968ca4889238f6a",
+    "wiki.json": "94d25f2f2d7bfacee9544cd614cb86baaf1d952be1b714badb38b7a98a8e636f",
     "terminal-snapshot.json": "c132b27031595c94a8b05eaf008545ccc3ac21d4dd170dd800c5e15b7f93e9bf"
   }
 }

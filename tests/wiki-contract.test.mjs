@@ -12,7 +12,7 @@ const clone=structuredClone;
 const completion={id:'cmpl_01ARZ3NDEKTSV4RRFFQ69G5FAV',workspace_id:'wsp_01ARZ3NDEKTSV4RRFFQ69G5FAV',chat_id:chatId,team_id:'team_01ARZ3NDEKTSV4RRFFQ69G5FAV',user_id:'usr_01ARZ3NDEKTSV4RRFFQ69G5FAV',models_subagents:[],started_at:'2026-10-13T00:00:00Z',usage:{},cost_usd:null,status:'running',created_at:'2026-10-13T00:00:00Z',updated_at:'2026-10-13T00:00:00Z'};
 
 test('default contract 3 preflight precedes versioned mutation and preserves exact body',async()=>{
- const seen=[];const c=new EnvaiClient({baseUrl,apiKey:'key',fetch:async(u,i)=>{seen.push([u,i]);return json(u.endsWith('/capabilities')?capabilities:{turn_id:'turn'},202);}});
+ const seen=[];const c=new EnvaiClient({baseUrl,apiKey:'key',fetch:async(u,i)=>{seen.push([u,i]);return json(u.endsWith('/capabilities')?capabilities:{status:'accepted',turn_id:'cmpl_01ARZ3NDEKTSV4RRFFQ69G5FAV'},202);}});
  await c.sendChatMessage({chat_id:'a/b',body:{message:'hi'}});
  assert.deepEqual(seen.map(([u,i])=>[new URL(u).pathname,i.method,i.headers.get('X-Envai-Contract-Version')]),[['/api/v1/atp/v3/capabilities','GET','3'],['/api/v1/atp/v3/chats/a%2Fb/messages','POST','3']]);
  assert.equal(seen[1][1].body,'{"message":"hi"}');
@@ -141,7 +141,7 @@ test('all catalog range, header key fallback and empty decoded metadata are test
  let seen;const c=new EnvaiClient({baseUrl,fetch:negotiatedFetch(async(u,i)=>{seen=[u,i];return json({data:u.includes('categories')?{...wikiFixture('category-index').data,entries:[],returned_count:0}:operation});})});
  await c.wiki.categoryIndex({workspace_id:'w',category_id:'c',all:true});assert.equal(new URL(seen[0]).search,'?all=true');
  await c.wiki.inbox({workspace_id:'w',body:{webhook_url:'https://app.example/hook'}},{headers:{'Idempotency-Key':'provided-key'}});assert.equal(seen[1].headers.get('Idempotency-Key'),'provided-key');
- const empty=new EnvaiClient({baseUrl,fetch:negotiatedFetch(async()=>new Response(null,{status:204}))});assert.equal(await empty.cancelChatTurn({chat_id:'x'}),undefined);
+ const empty=new EnvaiClient({baseUrl,fetch:negotiatedFetch(async()=>new Response(null,{status:204}))});await assert.rejects(empty.cancelChatTurn({chat_id:'x'}),ProtocolError);assert.equal(await empty.deleteUserTool({name:'x'}),undefined);
 });
 test('parser and generic schema validation reject unsupported selected profiles',()=>{
  assert.throws(()=>parseEvent(event('ping'),4),ProtocolError);assert.throws(()=>validateContractValue('UsageCost',{},4),CompatibilityError);
@@ -205,11 +205,21 @@ test('truncated finite legacy SSE tail is an atomic protocol error',async()=>{
 });
 test('shared schemas match the verified backend Git tree byte-for-byte',async()=>{
  const {createHash}=await import('node:crypto');const manifest=JSON.parse(readFileSync(new URL('../contracts/manifest.json',import.meta.url),'utf8'));
- assert.equal(manifest.commit,'c27963d0848540679bccf30d2aeab354097b1a38');assert.equal(manifest.operationCount,65);assert.equal(manifest.atpVersion,3);
+ assert.equal(manifest.commit,'6a4e45bafe6f5856ef92a57b37db08769738b412');assert.equal(manifest.operationCount,71);assert.equal(manifest.atpVersion,3);
  assert.deepEqual(Object.keys(manifest.sources).sort(),['events-v2.json','events.json','openapi.yaml','terminal-snapshot.json','wiki.json']);
  for(const [name,source]of Object.entries(manifest.sources)){const bytes=readFileSync(new URL('../contracts/'+name,import.meta.url));assert.equal(bytes.length,source.bytes);assert.equal(createHash('sha256').update(bytes).digest('hex'),source.sha256);assert.equal(createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex'),source.git_blob_sha);assert.equal(source.repository_path,'packages/contracts/'+name);}
  const openapi=JSON.parse(readFileSync(new URL('../contracts/openapi.json',import.meta.url),'utf8'));const ids=Object.values(openapi.paths).flatMap(path=>Object.values(path).filter(x=>x?.operationId).map(x=>x.operationId));assert.deepEqual(ids.sort(),Object.keys(operations).sort());
  assert.ok(openapi.components.schemas.ImageGenerationRequest.properties.aspect_ratio.enum.every(x=>typeof x==='string'));
+});
+test('derived OpenAPI and shared attachment fixtures retain separate provenance',async()=>{
+ const {createHash}=await import('node:crypto');const manifest=JSON.parse(readFileSync(new URL('../contracts/manifest.json',import.meta.url),'utf8'));
+ assert.deepEqual(Object.keys(manifest.derived_artifacts),['openapi.json']);
+ assert.deepEqual(Object.keys(manifest.shared_fixtures),['failed.json','pending.json','ready.json','recoverable.json']);
+ for(const [collection,entries]of Object.entries({derived_artifacts:manifest.derived_artifacts,shared_fixtures:manifest.shared_fixtures}))for(const[name,entry]of Object.entries(entries)){
+  const bytes=readFileSync(new URL('../'+entry.snapshot_path,import.meta.url));assert.equal(createHash('sha256').update(bytes).digest('hex'),entry.sha256);assert.ok(entry.origin);
+  if(collection==='derived_artifacts'){assert.equal(bytes.length,entry.bytes);assert.equal(entry.source_repository_path,'packages/contracts/openapi.yaml');}
+  else assert.equal(entry.repository_path,'packages/contracts/fixtures/chat-attachments/'+name);
+ }
 });
 test('actual control-plane HTTP payloads hydrate through selected contracts with verified provenance',async()=>{
  const load=name=>JSON.parse(readFileSync(new URL('../testdata/control-plane-http/'+name+'.json',import.meta.url),'utf8'));

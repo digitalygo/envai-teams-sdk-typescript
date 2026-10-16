@@ -22,7 +22,8 @@
     "LICENSE",
     "migrations",
     "docs/WIKI.md",
-    "docs/MIGRATION_V3.md"
+    "docs/MIGRATION_V3.md",
+    "docs/CHAT_ATTACHMENTS.md"
   ],
   "scripts": {
     "generate": "node scripts/generate.mjs",

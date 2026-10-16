@@ -6,7 +6,7 @@ export type AtpUsage = { "input_tokens": number; "output_tokens": number; "cost_
 export type AtpToolKind = "server" | "client" | "knowledge" | "code";
 export type AtpPing = {  };
 export type AtpChatTitleUpdated = { "title": string };
-export type AtpTurnStarted = { "turn_id": string; "input": string };
+export type AtpTurnStarted = { "turn_id": string; "input": string; "attachments"?: Array<AtpChatAttachmentManifestEvent> };
 export type AtpTurnCompleted = { "turn_id": string; "usage": AtpUsage; "cost": number | null; "chat_usage": AtpUsage; "chat_cost": number | null; "finish_reason": string; "billing"?: AtpBillingState; "usage_cost"?: AtpUsageCost };
 export type AtpTurnCancelled = { "turn_id": string; "reason": string; "usage": AtpUsage; "cost": number | null; "chat_usage": AtpUsage; "chat_cost": number | null; "billing"?: AtpBillingState; "usage_cost"?: AtpUsageCost };
 export type AtpTurnFailed = { "turn_id": string; "code": string; "message": string; "usage": AtpUsage; "cost": number | null; "chat_usage": AtpUsage; "chat_cost": number | null; "billing"?: AtpBillingState; "usage_cost"?: AtpUsageCost };
@@ -36,6 +36,7 @@ export type AtpApprovalExpire = { "approval_id": string };
 export type AtpBillingState = { "status": "inactive"; [key: string]: unknown };
 export type AtpCurrencyAmount = { "currency": string; "amount": string; [key: string]: unknown };
 export type AtpUsageCost = ({ "status": "pending" | "complete"; "basis": "reported" | "calculated" | "mixed" | "none"; "scope_status": "open" | "closed"; "revision": number; "as_of": string; "invocation_count": number; "pending_invocation_count": number; "totals": (Array<AtpCurrencyAmount> | null); "priced_subtotals": Array<AtpCurrencyAmount>; [key: string]: unknown });
+export type AtpChatAttachmentManifestEvent = { "attachment_id": string; "original_name": string; "revision": number; "sha256": string; "bytes": number; "conversion": { [key: string]: unknown }; [key: string]: unknown };
 export interface EventDataMap {
 "ping": AtpPing;
 "chat.title.updated": AtpChatTitleUpdated;

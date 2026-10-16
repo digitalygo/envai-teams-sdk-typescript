@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EnvaiClient, operations, HttpTransport, EnvaiError, AuthenticationError, AccessDeniedError, NotFoundError, ConflictError, ValidationError, RateLimitError, ProviderError, FileError, ServerError, TransportError, ProtocolError, retryAfterMs, delay, positive } from '../dist/index.js';
-import {fixture,json,negotiatedFetch,capabilities} from './helpers.mjs';
+import {fixture,json,negotiatedFetch,capabilities,turnId} from './helpers.mjs';
 const completion={id:'cmpl_01ARZ3NDEKTSV4RRFFQ69G5FAV',workspace_id:'wsp_01ARZ3NDEKTSV4RRFFQ69G5FAV',chat_id:'cht_01ARZ3NDEKTSV4RRFFQ69G5FAV',team_id:'team_01ARZ3NDEKTSV4RRFFQ69G5FAV',user_id:'usr_01ARZ3NDEKTSV4RRFFQ69G5FAV',models_subagents:[],started_at:'2026-10-13T00:00:00Z',usage:{},cost_usd:null,status:'running',created_at:'2026-10-13T00:00:00Z',updated_at:'2026-10-13T00:00:00Z'};
 const baseUrl='https://example.test/api/v1';
 for(const item of fixture('operations.json'))test(`inventory and wire: ${item.id}`,async()=>{
  const operation=operations[item.id];assert.equal(operation.method,item.method);assert.equal(operation.path.replace('/atp/v3',''),item.path);assert.equal(!operation.public,item.authenticated);
  let seen;
- const client=new EnvaiClient({baseUrl,apiKey:'secret-key',fetch:negotiatedFetch(async(url,init)=>{seen={url,init};return operation.mode==='empty'?new Response(null,{status:204}):operation.mode==='stream'?new Response('data: x\n\n',{headers:{'content-type':'text/event-stream'}}):operation.mode==='binary'?new Response('binary'):json(item.id==='getCapabilities'?{...capabilities,object:'list'}:item.id==='getCompletion'?{data:completion}:item.id==='listCompletions'?{data:[],links:{},meta:{current_page:1},object:'list'}:operation.unwrap?{data:{id:'value'}}:{data:[],meta:{current_page:1},object:'list'});},item.id!=='getCapabilities')});
+ const client=new EnvaiClient({baseUrl,apiKey:'secret-key',fetch:negotiatedFetch(async(url,init)=>{seen={url,init};return operation.mode==='empty'?new Response(null,{status:204}):operation.mode==='stream'?new Response('data: x\n\n',{headers:{'content-type':'text/event-stream'}}):operation.mode==='binary'?new Response('binary'):json(item.id==='sendChatMessage'?{status:'accepted',turn_id:turnId}:item.id==='getCapabilities'?{...capabilities,object:'list'}:item.id==='getCompletion'?{data:completion}:item.id==='listCompletions'?{data:[],links:{},meta:{current_page:1},object:'list'}:operation.unwrap?{data:{id:'value'}}:{data:[],meta:{current_page:1},object:'list'});},item.id!=='getCapabilities')});
  const params=Object.fromEntries(operation.parameters.filter(p=>p.required).map(p=>[p.name,p.in==='query'?'value':p.name==='name'?'a/b':'id']));
  if(operation.bodyRequired)params.body=operation.bodyMime==='multipart/form-data'?{file:new Blob(['input'],{type:'image/png'})}:{name:'example'};
 
@@ -20,12 +20,13 @@ for(const item of fixture('operations.json'))test(`inventory and wire: ${item.id
  if(operation.mode==='empty')assert.equal(result,undefined);
  else if(operation.mode==='binary'||operation.mode==='stream')assert.ok(result instanceof Response);
  else if(operation.unwrap)assert.deepEqual(result,item.id==='getCompletion'?completion:{id:'value'});
+ else if(item.id==='sendChatMessage')assert.deepEqual(result,{status:'accepted',turn_id:turnId});
  else assert.equal(result.object,'list');
  if(operation.bodyMime==='multipart/form-data'){assert.ok(seen.init.body instanceof FormData);assert.equal(seen.init.headers.get('content-type'),null);}
 });
 test('all inventory methods and service aliases available, secrets hidden',()=>{
  const c=new EnvaiClient({baseUrl,apiKey:'do-not-expose'});
- assert.equal(Object.keys(operations).length,65);assert.ok(c.chats.sendMessage&&c.workspaceFiles.convertToPdf&&c.images.models&&c.apiKeys.create);
+ assert.equal(Object.keys(operations).length,71);assert.ok(c.chats.sendMessage&&c.workspaceFiles.convertToPdf&&c.images.models&&c.apiKeys.create);
  assert.ok(!JSON.stringify(c).includes('do-not-expose'));
 });
 test('origin base normalization, prefix preservation, JWKS override and query encoding',async()=>{

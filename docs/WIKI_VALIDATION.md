@@ -1,5 +1,15 @@
 # Wiki V1 / contract 3 validation
 
+## Chat attachments contract update (2026-10-16)
+
+Current source schemas are pinned to backend commit `6a4e45bafe6f5856ef92a57b37db08769738b412`: 71 HTTP operations, 115 HTTP models and 29 ATP event types. The manifest separates exact upstream YAML/JSON schemas, the generated OpenAPI JSON representation, and shared synthetic attachment fixtures. Historical v2 provenance remains unchanged. See [chat attachments](CHAT_ATTACHMENTS.md) for conversion, context, retention and retry semantics. Publishing the SDK does not deploy the backend.
+
+Local checks: 288 tests passed with PostgreSQL and no skips; line coverage 99.75%, branch coverage 97.45%. Typechecking, deterministic generation, packed import and dependency audit passed.
+
+## Earlier validation records
+
+The following counts and source pins describe earlier checkpoints.
+
 Validated 2026-10-13 against TypeScript alpha baseline `402af49ec08e2977f297b598a655728be4d66827` (tree `4fb8d4664e43794d83a685ecbb6a4e5038090561`). Shared contracts are pinned to [Envai Teams `c27963d0848540679bccf30d2aeab354097b1a38`](https://github.com/digitalygo/envai-teams/commit/c27963d0848540679bccf30d2aeab354097b1a38), tree `898d7b58c5d10d2d79c160ab551830a2ae2e7196`.
 
 All five shared schema files independently match the upstream tree's Git blob SHA, SHA-256 and byte length. `contracts/manifest.json` records those values. Original SDK v2 fixtures and their original provenance remain separately preserved. Current source schemas generate 65 HTTP operations, 109 HTTP models and 29 ATP event types. String aspect-ratio enums remain strings in YAML, generated JSON and TypeScript types.

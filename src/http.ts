@@ -62,9 +62,9 @@ export class HttpTransport {
     this.#maxDelay = positive(options.retry?.maxDelayMs ?? 30_000, 'maxDelayMs', true);
   }
   get contractVersion(): ContractVersion { return this.#contractVersion; }
-  async negotiate(options: RequestOptions = {}): Promise<void> {
+  async negotiate(options: RequestOptions = {}): Promise<{ features?: string[] }> {
     if (this.contractVersion !== 3) throw new CompatibilityError('Contract 2 cannot start tracked work');
-    await this.request<unknown>({ id: 'negotiateContract', method: 'GET', path: '/atp/v3/capabilities', public: false, origin: false, parameters: [], bodyRequired: false, mode: 'json', unwrap: false }, {}, options);
+    return this.request<{ features?: string[] }>({ id: 'negotiateContract', method: 'GET', path: '/atp/v3/capabilities', public: false, origin: false, parameters: [], bodyRequired: false, mode: 'json', unwrap: false }, {}, options);
   }
   observe(event: Observation): void { try { this.#observe?.(Object.freeze({ ...event })); } catch { /* Telemetry cannot change protocol behavior. */ } }
   async request<T>(operation: Operation, params: object, options: RequestOptions = {}): Promise<T> {
@@ -73,8 +73,9 @@ export class HttpTransport {
     if (operation.id.endsWith('Legacy') && this.contractVersion !== 2) throw new CompatibilityError('Legacy operations require contractVersion: 2');
     const atp = path.startsWith('/chats/') || path.startsWith('/atp/v3/') || path === '/capabilities';
     const wiki = !operation.public && /\/(wiki|files\/sources)(\/|$)/.test(path);
-    const negotiated = atp || wiki || /\/completions(\/|$)/.test(path);
-    if (this.contractVersion === 2 && (wiki || operation.method !== 'GET')) throw new CompatibilityError('Contract 2 is historical read-only; wiki requires contract 3');
+    const attachment = /\/chats\/[^/]+\/attachments(\/|$)/.test(path);
+    const negotiated = atp || wiki || attachment || /\/completions(\/|$)/.test(path);
+    if (this.contractVersion === 2 && (wiki || attachment || operation.method !== 'GET')) throw new CompatibilityError('Contract 2 is historical read-only; wiki requires contract 3');
     if (atp) path = this.contractVersion === 3 ? '/atp/v3' + path.replace(/^\/atp\/v3/, '') : path.replace(/^\/atp\/v3/, '');
     const query = new URLSearchParams();
     const headers = new Headers(options.headers);
@@ -98,7 +99,7 @@ export class HttpTransport {
       if (values.type !== undefined && values.type !== 'raw' && values.type !== 'artifact') throw new TypeError('Invalid category entry type');
       if (values.catalog_revision !== undefined && (!Number.isSafeInteger(values.catalog_revision) || Number(values.catalog_revision) < 0)) throw new TypeError('Invalid catalog_revision');
     }
-    if (operation.id === 'uploadWikiSource') {
+    if (['uploadWikiSource', 'uploadChatAttachment'].includes(operation.id)) {
       const file = (values.body as { file?: unknown } | undefined)?.file;
       if (!(file instanceof Blob) || file.size > 1_000_000_000) throw new TypeError('Source file must be a Blob of at most 1,000,000,000 bytes');
     }
@@ -120,7 +121,12 @@ export class HttpTransport {
         headers.delete('content-type'); body = data;
       } else { headers.set('content-type', 'application/json'); body = JSON.stringify(values.body); }
     }
-    if (negotiated && operation.method !== 'GET') await this.negotiate(options);
+    const attachmentIds = operation.id === 'sendChatMessage' ? (values.body as { attachment_ids?: string[] } | undefined)?.attachment_ids ?? [] : [];
+    if (attachmentIds.length && !headers.has('Idempotency-Key')) throw new TypeError('Attachment messages require Idempotency-Key');
+    if (negotiated && operation.method !== 'GET') {
+      const capabilities = await this.negotiate(options);
+      if ((attachment || attachmentIds.length > 0) && !capabilities.features?.includes('chat_attachments')) throw new CompatibilityError('Server does not advertise chat_attachments');
+    }
     for (let attempt = 0; ; attempt++) {
       options.signal?.throwIfAborted();
       const controller = new AbortController();
@@ -139,13 +145,14 @@ export class HttpTransport {
         }
         if (negotiated && response.headers.get('X-Envai-Contract-Version') !== String(this.contractVersion)) { await response.body?.cancel(); throw new CompatibilityError('Missing or mismatched contract acknowledgment; mutation outcome may be unknown'); }
         if (operation.mode === 'stream' || operation.mode === 'binary') return response as T;
-        if (operation.mode === 'empty' || response.status === 204) return undefined as T;
+        if (operation.mode === 'empty') return undefined as T;
         let data: unknown;
         try { data = await response.json(); } catch { throw new ProtocolError('Invalid JSON response'); }
         if (operation.unwrap) {
           if (!data || typeof data !== 'object' || !('data' in data)) throw new ProtocolError('Missing resource data envelope', data);
           return validateResponse(operation.id, (data as { data: T }).data, this.contractVersion) as T;
         }
+        if (attachmentIds.length && JSON.stringify((data as { attachment_ids?: string[] }).attachment_ids) !== JSON.stringify(attachmentIds)) throw new ProtocolError('Message acceptance omitted or changed attachment IDs', data);
         return validateResponse(operation.id, data, this.contractVersion) as T;
       } catch (error) {
         options.signal?.throwIfAborted();

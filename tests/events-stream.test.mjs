@@ -108,7 +108,7 @@ test('send helper propagates failed/cancelled terminal; no message replay; accep
    posts++;if(kind==='missing-id')return json({status:'accepted'},202);
    controller.enqueue(new TextEncoder().encode('data: '+JSON.stringify(event(kind,1))+'\n\n'));return json({status:'accepted',turn_id:turnId},202);
   }});
-  if(kind==='missing-id')await assert.rejects(c.sendAndWait(chatId,{message:'hi'}),/omitted turn_id/);else assert.equal((await c.sendAndWait(chatId,{message:'hi'})).terminal.type,kind);
+  if(kind==='missing-id')await assert.rejects(c.sendAndWait(chatId,{message:'hi'}),/required property 'turn_id'/);else assert.equal((await c.sendAndWait(chatId,{message:'hi'})).terminal.type,kind);
   assert.equal(posts,1);
  }
 });

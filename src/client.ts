@@ -8,7 +8,7 @@ import { ProtocolError } from './errors.js';
 import type { ATPEvent, KnownEvent } from './event-types.js';
 import { ClientToolRunner, type ToolRunnerOptions } from './tools.js';
 import { JwksCache, ToolRequestVerifier, type SigningJwks, type JwksSource } from './security.js';
-export interface TurnOptions extends StreamOptions { toolRunner?: ClientToolRunner; readyTimeoutMs?: number; }
+export interface TurnOptions extends StreamOptions { toolRunner?: ClientToolRunner; readyTimeoutMs?: number; idempotencyKey?: string; }
 export interface TurnResult {
   chatId: string; turnId: string; text: string; lastSeq: number;
   terminal: KnownEvent<'turn.completed' | 'turn.failed' | 'turn.cancelled'>;
@@ -34,24 +34,31 @@ export class EnvaiClient extends GeneratedClient {
     const signal = options.signal ? AbortSignal.any([controller.signal, options.signal]) : controller.signal;
     const stream = this.events(chatId, { ...options, signal });
     const iterator = stream[Symbol.asyncIterator]();
+    const replay: ATPEvent[] = [];
+    let replayBytes = 0;
     let timer: ReturnType<typeof setTimeout> | undefined = setTimeout(() => controller.abort(new DOMException('Live subscription ping did not arrive', 'TimeoutError')), positive(options.readyTimeoutMs ?? 30_000, 'readyTimeoutMs'));
     try {
       for (;;) {
         const next = await iterator.next();
         if (next.done) throw new ProtocolError('Stream ended before subscription readiness');
         if (isEvent(next.value, 'ping')) break;
-        // Existing replay is intentionally excluded from a new turn, but tool resolution can cancel old local work.
-        if (options.toolRunner && !isEvent(next.value, 'agent.tool.request')) await options.toolRunner.accept(next.value);
+        if (options.idempotencyKey) {
+          replayBytes += Buffer.byteLength(JSON.stringify(next.value));
+          if (replayBytes > 16 * 1024 * 1024) throw new ProtocolError('Idempotent send replay exceeds 16 MiB; resume the known turn using its cursor');
+          replay.push(next.value);
+        } else if (options.toolRunner && !isEvent(next.value, 'agent.tool.request')) await options.toolRunner.accept(next.value);
       }
       clearTimeout(timer); timer = undefined;
-      const accepted = await this.sendChatMessage({ chat_id: chatId, body: message }, { signal, headers: options.headers });
+      const accepted = await this.sendChatMessage({ chat_id: chatId, body: message, idempotencyKey: options.idempotencyKey }, { signal, headers: options.headers });
       if (!accepted.turn_id) throw new ProtocolError('Message acceptance omitted turn_id');
+      const replayCompleted = replay.some(event => event.turn_id === accepted.turn_id && isTerminal(event));
       for (;;) {
-        const next = await iterator.next();
+        const replayed = replay.length > 0;
+        const next = replayed ? { done: false, value: replay.shift()! } : await iterator.next();
         if (next.done) throw new ProtocolError('Stream ended before terminal event');
         const event = next.value;
         if (event.turn_id !== accepted.turn_id) continue;
-        if (options.toolRunner) await options.toolRunner.accept(event);
+        if (options.toolRunner && !(replayed && replayCompleted && isEvent(event, 'agent.tool.request'))) await options.toolRunner.accept(event);
         yield event;
         if (isTerminal(event)) return;
       }
