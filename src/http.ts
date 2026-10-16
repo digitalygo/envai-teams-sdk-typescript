@@ -145,7 +145,7 @@ export class HttpTransport {
         }
         if (negotiated && response.headers.get('X-Envai-Contract-Version') !== String(this.contractVersion)) { await response.body?.cancel(); throw new CompatibilityError('Missing or mismatched contract acknowledgment; mutation outcome may be unknown'); }
         if (operation.mode === 'stream' || operation.mode === 'binary') return response as T;
-        if (operation.mode === 'empty' || response.status === 204) return undefined as T;
+        if (operation.mode === 'empty') return undefined as T;
         let data: unknown;
         try { data = await response.json(); } catch { throw new ProtocolError('Invalid JSON response'); }
         if (operation.unwrap) {

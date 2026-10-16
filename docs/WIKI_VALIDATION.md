@@ -2,7 +2,7 @@
 
 ## Chat attachments contract update (2026-10-16)
 
-Current source schemas are pinned to backend commit `96acf00162984af4a86a671f924c53a18960fae6`: 71 HTTP operations, 115 HTTP models and 29 ATP event types. The manifest separates exact upstream YAML/JSON schemas, the generated OpenAPI JSON representation, and shared synthetic attachment fixtures. Historical v2 provenance remains unchanged. See [chat attachments](CHAT_ATTACHMENTS.md) for conversion, context, retention and retry semantics. Publishing the SDK does not deploy the backend.
+Current source schemas are pinned to backend commit `6a4e45bafe6f5856ef92a57b37db08769738b412`: 71 HTTP operations, 115 HTTP models and 29 ATP event types. The manifest separates exact upstream YAML/JSON schemas, the generated OpenAPI JSON representation, and shared synthetic attachment fixtures. Historical v2 provenance remains unchanged. See [chat attachments](CHAT_ATTACHMENTS.md) for conversion, context, retention and retry semantics. Publishing the SDK does not deploy the backend.
 
 Local checks: 288 tests passed with PostgreSQL and no skips; line coverage 99.75%, branch coverage 97.45%. Typechecking, deterministic generation, packed import and dependency audit passed.
 

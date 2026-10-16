@@ -76,3 +76,26 @@ test('filesystem upload and bounded cancellable polling do not submit messages',
   await assert.rejects(waitForAttachment(c,'w','c','a',{timeoutMs:0}),RangeError);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+for (const accepted of [{status:'not-accepted',turn_id:'cmpl_01j5abcdefghjkmnpqrstvwxyz'},{status:'accepted',turn_id:'invalid'},{status:'accepted'}]) test('message acknowledgment validates status and turn '+JSON.stringify(accepted),async()=>{
+ let posts=0;
+ const c=client(async()=>{posts++;return json({...accepted,attachment_ids:['a']},202);});
+ await assert.rejects(c.sendChatMessage({chat_id:'c',idempotencyKey:'stable',body:{message:'read',attachment_ids:['a']}}),ProtocolError);
+ assert.equal(posts,1);
+});
+for (const features of ['chat_attachments','prefix_chat_attachments_suffix',[1],null]) test('malformed capabilities fail before mutation '+JSON.stringify(features),async()=>{
+ let posts=0;
+ const c=new EnvaiClient({baseUrl:'https://api.example',fetch:async(u,i)=>{if(i.method==='POST')posts++;return json({...caps,features});}});
+ await assert.rejects(c.attachments.retry({...params,idempotencyKey:'retry'}),CompatibilityError);
+ assert.equal(posts,0);
+});
+test('JSON resources reject empty 204 responses',async()=>{
+ await assert.rejects(client(async()=>new Response(null,{status:204,headers:{'X-Envai-Contract-Version':'3'}})).attachments.delete(params),ProtocolError);
+});
+test('polling waits for scheduled recovery without requesting retry',async()=>{
+ const recoverable=JSON.parse(readFileSync(new URL('../testdata/chat-attachments/recoverable.json',import.meta.url))).data;
+ let reads=0;
+ const c=client(async(u,i)=>{assert.equal(i.method,'GET');return json({data:++reads===1?recoverable:ready});});
+ assert.equal((await waitForAttachment(c,'w','c','a',{intervalMs:1,timeoutMs:1000})).lifecycle,'ready');
+ assert.equal(reads,2);
+});
