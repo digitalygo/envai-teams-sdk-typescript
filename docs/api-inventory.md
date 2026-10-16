@@ -1,6 +1,6 @@
 # HTTP operation inventory
 
-Generated contract snapshot: API 3.0.0, 65 operations. Paths are relative to /api/v1 except the two origin-level public JWKS routes. ATP v3, completion and authenticated source/wiki routes require negotiation. Explicit legacy methods require read-only contract 2.
+Generated contract snapshot: API 3.0.0, 71 operations. Paths are relative to /api/v1 except the two origin-level public JWKS routes. ATP v3, completion and authenticated source/wiki routes require negotiation. Explicit legacy methods require read-only contract 2.
 
 | Operation ID / client method | HTTP | Path | Bearer |
 | --- | --- | --- | --- |
@@ -56,6 +56,12 @@ Generated contract snapshot: API 3.0.0, 65 operations. Paths are relative to /ap
 | listImageModels | GET | `/images/models` | Yes |
 | downloadArtifact | GET | `/artifacts/download` | No |
 | handleProviderWebhook | POST | `/webhooks/providers/{provider}` | No |
+| uploadChatAttachment | POST | `/workspaces/{workspace_id}/chats/{chat_id}/attachments` | Yes |
+| listChatAttachments | GET | `/workspaces/{workspace_id}/chats/{chat_id}/attachments` | Yes |
+| getChatAttachment | GET | `/workspaces/{workspace_id}/chats/{chat_id}/attachments/{attachment_id}` | Yes |
+| deleteChatAttachment | DELETE | `/workspaces/{workspace_id}/chats/{chat_id}/attachments/{attachment_id}` | Yes |
+| retryChatAttachment | POST | `/workspaces/{workspace_id}/chats/{chat_id}/attachments/{attachment_id}/retry` | Yes |
+| downloadChatAttachment | GET | `/workspaces/{workspace_id}/chats/{chat_id}/attachments/{attachment_id}/download` | Yes |
 | uploadWikiSource | POST | `/workspaces/{workspace_id}/files/sources` | Yes |
 | getWikiSource | GET | `/workspaces/{workspace_id}/files/sources/{file_id}` | Yes |
 | downloadWikiSource | GET | `/workspaces/{workspace_id}/files/sources/{file_id}/download` | Yes |

@@ -12,7 +12,7 @@ export type ConversionState = { "status": "queued" | "running" | "completed" | "
 export type IndexingState = { "status": "pending_conversion" | "pending" | "processed" | "withdrawn" | "failed"; [key: string]: unknown };
 export type WikiSource = { "file_id": string; "workspace_id": string; "original_name": string; "mime_type": string; "byte_size": number; "lifecycle": "uploaded" | "inbox" | "raw" | "outbox" | "deleting" | "deleted"; "source_revision": number; "conversion": ConversionState; "indexing": IndexingState; "canonical_raw_path": (string | null); "billing": BillingState; "usage_cost": UsageCost; "status_url": string; [key: string]: unknown };
 export type BatchSizes = { "inbox": number; "outbox": number; [key: string]: unknown };
-export type FileOutcome = { "file_id": string; "status": "pending" | "running" | "succeeded" | "withdrawn" | "failed"; "error_code": (string | null); [key: string]: unknown };
+export type FileOutcome = { "file_id": string; "status": "pending" | "running" | "succeeded" | "withdrawn" | "failed" | "deferred"; "error_code": (string | null); [key: string]: unknown };
 export type PhaseResult = { "status": "pending" | "running" | "completed" | "failed" | "skipped_empty"; "selected": number; "succeeded": number; "withdrawn": number; "failed": number; "files": Array<FileOutcome>; [key: string]: unknown };
 export type WikiOperation = { "operation_id": string; "workspace_id": string; "kind": "inbox" | "outbox" | "sync"; "status": "queued" | "running" | "completed" | "failed"; "phase": (string | null); "phases": { "inbox"?: PhaseResult; "outbox"?: PhaseResult }; "started_at": (string | null); "finished_at": (string | null); "batch_sizes": BatchSizes; "billing": BillingState; "usage_cost": UsageCost; [key: string]: unknown };
 export type Category = { "category_id": string; "name": string; "description": string; [key: string]: unknown };
@@ -25,8 +25,14 @@ export type WikiFileDeletedEvent = { "schema_version": "1"; "event_id": string; 
 export type WikiOperationEvent = ({ "schema_version": "1"; "event_id": string; "event_type": "wiki.inbox.completed" | "wiki.inbox.failed" | "wiki.outbox.completed" | "wiki.outbox.failed" | "wiki.sync.completed" | "wiki.sync.failed"; "operation_id": string; "workspace_id": string; "occurred_at": string; "status": "completed" | "failed"; "phases": { "inbox"?: PhaseResult; "outbox"?: PhaseResult }; "finished_at": string; "billing": BillingState; "usage_cost": UsageCost; [key: string]: unknown });
 export type WikiWebhookEvent = (WikiFileProcessedEvent | WikiFileDeletedEvent | WikiOperationEvent);
 export type Error = { "error": { "type": "unauthenticated" | "invalid_request" | "not_found" | "conflict" | "validation_error" | "access_denied" | "provider_error" | "server_error" | "internal_error" | "file_not_found" | "file_conflict" | "invalid_path" | "file_too_large" | "file_service_error" | "file_service_unavailable" | "too_many_requests"; "code"?: string | null; "message": string; "details"?: { [key: string]: unknown } | null; [key: string]: unknown }; [key: string]: unknown };
-export type ChatMessageRequest = { "message": string; [key: string]: unknown };
-export type ChatMessageAccepted = { "status": "accepted"; "turn_id": string; [key: string]: unknown };
+export type AttachmentManifest = { "attachment_id": string; "original_name": string; "revision": number; "sha256": string; "bytes": number; "conversion": { [key: string]: unknown }; [key: string]: unknown };
+export type AttachmentConversion = { "status": "queued" | "running" | "completed" | "failed"; "error_code": string | null; "recoverable": boolean; "next_retry_at": string | null; "retryable": boolean; [key: string]: unknown };
+export type ChatAttachment = { "attachment_id": string; "workspace_id": string; "chat_id": string; "original_name": string; "mime_type": string; "byte_size": number; "lifecycle": "staging" | "uploaded" | "ready" | "deleting" | "deleted"; "revision": number; "conversion": AttachmentConversion; "derived": ({ "sha256": string; "bytes": number; "conversion": { [key: string]: unknown }; [key: string]: unknown } | null); "expires_at": string; "attached_at": string | null; "usage_cost": UsageCost; [key: string]: unknown };
+export type ChatAttachmentResource = { "data": ChatAttachment; [key: string]: unknown };
+export type ChatAttachmentCollection = { "data": { "attachments": Array<ChatAttachment>; [key: string]: unknown }; [key: string]: unknown };
+export type ChatAttachmentUploadRequest = { "file": Blob };
+export type ChatMessageRequest = { "message": string; "attachment_ids"?: Array<string>; [key: string]: unknown };
+export type ChatMessageAccepted = { "status": "accepted"; "turn_id": string; "attachment_ids"?: Array<string>; [key: string]: unknown };
 export type TurnAccepted = { "turn_id": string; [key: string]: unknown };
 export type ToolOutputRequest = { "call_id": string; "output": string; "is_error"?: boolean; [key: string]: unknown };
 export type ApprovalRequest = { "approval_id": string; "approve": boolean; "reason"?: string; [key: string]: unknown };
@@ -111,7 +117,7 @@ export type WorkspaceFileRequest = { "path": string; "content": string; [key: st
 export type ConvertToPdfRequest = { "path": string; [key: string]: unknown };
 export type ThrottleError = { "error": { "type": "too_many_requests"; "message": string }; [key: string]: unknown };
 export type CapabilitiesLegacy = { "protocol_version": 2; "families": Array<"turn" | "agent" | "chat">; "event_types": Array<string>; "tool_kinds": Array<"server" | "client" | "knowledge" | "code">; "features": Array<"replay" | "fork" | "restore" | "ping" | "background_delegation" | "client_tools" | "chat_title">; [key: string]: unknown };
-export type SendChatMessageParams = { "chat_id": string; body: ChatMessageRequest };
+export type SendChatMessageParams = { "chat_id": string; "idempotencyKey"?: string; body: ChatMessageRequest };
 export type SendChatMessageResult = ChatMessageAccepted;
 export type StreamChatEventsParams = { "chat_id": string; "after"?: number };
 export type StreamChatEventsResult = Response;
@@ -215,6 +221,18 @@ export type DownloadArtifactParams = { "generation": string; "artifact": string;
 export type DownloadArtifactResult = Response;
 export type HandleProviderWebhookParams = { "provider": "replicate" | "vertex" | "fal" | "openai" | "black-forest-labs" | "recraft" | "byteplus"; "callback_token"?: string; body?: ProviderWebhookPayload };
 export type HandleProviderWebhookResult = WebhookOk;
+export type UploadChatAttachmentParams = { "workspace_id": string; "chat_id": string; "idempotencyKey": string; body: ChatAttachmentUploadRequest };
+export type UploadChatAttachmentResult = ChatAttachment;
+export type ListChatAttachmentsParams = { "workspace_id": string; "chat_id": string };
+export type ListChatAttachmentsResult = { "attachments": Array<ChatAttachment>; [key: string]: unknown };
+export type GetChatAttachmentParams = { "workspace_id": string; "chat_id": string; "attachment_id": string };
+export type GetChatAttachmentResult = ChatAttachment;
+export type DeleteChatAttachmentParams = { "workspace_id": string; "chat_id": string; "attachment_id": string };
+export type DeleteChatAttachmentResult = ChatAttachment;
+export type RetryChatAttachmentParams = { "workspace_id": string; "chat_id": string; "attachment_id": string; "idempotencyKey": string };
+export type RetryChatAttachmentResult = ChatAttachment;
+export type DownloadChatAttachmentParams = { "workspace_id": string; "chat_id": string; "attachment_id": string; "kind": "original" | "derived" };
+export type DownloadChatAttachmentResult = Response;
 export type UploadWikiSourceParams = { "workspace_id": string; "idempotencyKey": string; body: { "file": Blob; [key: string]: unknown } };
 export type UploadWikiSourceResult = WikiSource;
 export type GetWikiSourceParams = { "workspace_id": string; "file_id": string };
@@ -347,6 +365,18 @@ export class GeneratedClient {
  downloadArtifact(params: DownloadArtifactParams, options: RequestOptions = {}): Promise<DownloadArtifactResult> { return this.transport.request(operations.downloadArtifact, params, options); }
  /** Receive a provider webhook */
  handleProviderWebhook(params: HandleProviderWebhookParams, options: RequestOptions = {}): Promise<HandleProviderWebhookResult> { return this.transport.request(operations.handleProviderWebhook, params, options); }
+ /** uploadChatAttachment */
+ uploadChatAttachment(params: UploadChatAttachmentParams, options: RequestOptions = {}): Promise<UploadChatAttachmentResult> { return this.transport.request(operations.uploadChatAttachment, params, options); }
+ /** listChatAttachments */
+ listChatAttachments(params: ListChatAttachmentsParams, options: RequestOptions = {}): Promise<ListChatAttachmentsResult> { return this.transport.request(operations.listChatAttachments, params, options); }
+ /** getChatAttachment */
+ getChatAttachment(params: GetChatAttachmentParams, options: RequestOptions = {}): Promise<GetChatAttachmentResult> { return this.transport.request(operations.getChatAttachment, params, options); }
+ /** deleteChatAttachment */
+ deleteChatAttachment(params: DeleteChatAttachmentParams, options: RequestOptions = {}): Promise<DeleteChatAttachmentResult> { return this.transport.request(operations.deleteChatAttachment, params, options); }
+ /** retryChatAttachment */
+ retryChatAttachment(params: RetryChatAttachmentParams, options: RequestOptions = {}): Promise<RetryChatAttachmentResult> { return this.transport.request(operations.retryChatAttachment, params, options); }
+ /** downloadChatAttachment */
+ downloadChatAttachment(params: DownloadChatAttachmentParams, options: RequestOptions = {}): Promise<DownloadChatAttachmentResult> { return this.transport.request(operations.downloadChatAttachment, params, options); }
  /** uploadWikiSource */
  uploadWikiSource(params: UploadWikiSourceParams, options: RequestOptions = {}): Promise<UploadWikiSourceResult> { return this.transport.request(operations.uploadWikiSource, params, options); }
  /** getWikiSource */
@@ -373,6 +403,7 @@ export class GeneratedClient {
  streamChatEventsLegacy(params: StreamChatEventsLegacyParams, options: RequestOptions = {}): Promise<StreamChatEventsLegacyResult> { return this.transport.request(operations.streamChatEventsLegacy, params, options); }
  /** Advertised protocol metadata */
  getCapabilitiesLegacy(params: GetCapabilitiesLegacyParams = {}, options: RequestOptions = {}): Promise<GetCapabilitiesLegacyResult> { return this.transport.request(operations.getCapabilitiesLegacy, params, options); }
+ readonly attachments = { upload: this.uploadChatAttachment.bind(this), list: this.listChatAttachments.bind(this), get: this.getChatAttachment.bind(this), retry: this.retryChatAttachment.bind(this), delete: this.deleteChatAttachment.bind(this), download: this.downloadChatAttachment.bind(this) };
  readonly workspaces = { create: this.createWorkspace.bind(this), list: this.listWorkspaces.bind(this), get: this.getWorkspace.bind(this), update: this.updateWorkspace.bind(this) };
  readonly tools = { create: this.createUserTool.bind(this), list: this.listUserTools.bind(this), get: this.getUserTool.bind(this), update: this.updateUserTool.bind(this), delete: this.deleteUserTool.bind(this) };
  readonly chats = { create: this.createChat.bind(this), list: this.listChats.bind(this), get: this.getChat.bind(this), sendMessage: this.sendChatMessage.bind(this), eventsResponse: this.streamChatEvents.bind(this), cancel: this.cancelChatTurn.bind(this), steer: this.steerChatTurn.bind(this), submitToolOutput: this.resolveChatTool.bind(this), submitApproval: this.resolveChatApproval.bind(this), fork: this.forkChat.bind(this), restore: this.restoreChat.bind(this) };

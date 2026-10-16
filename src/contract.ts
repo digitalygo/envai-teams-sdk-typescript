@@ -38,7 +38,7 @@ function assertLegacyUsageCosts(value: unknown): void {
 
 export function validateContractValue<T>(name: string, value: unknown, version: ContractVersion = 3): T {
   if (version !== 2 && version !== 3) throw new CompatibilityError('Unsupported selected contract version');
-  const root = name === 'Completion' || name === 'CompletionCollection' ? `urn:envai:http:v${version}#/components/schemas/` : 'urn:envai:wiki#/$defs/';
+  const root = ['Completion', 'CompletionCollection', 'ChatAttachment', 'ChatAttachmentCollection'].includes(name) ? `urn:envai:http:v${version}#/components/schemas/` : 'urn:envai:wiki#/$defs/';
   const ref = root + name;
   let validate = validators.get(ref);
   if (!validate) { validate = ajv.compile({ $ref: ref }); validators.set(ref, validate); }
@@ -52,6 +52,7 @@ export function validateContractValue<T>(name: string, value: unknown, version: 
   return value as T;
 }
 const responseSchemas: Record<string, string> = {
+  uploadChatAttachment: 'ChatAttachment', getChatAttachment: 'ChatAttachment', retryChatAttachment: 'ChatAttachment', deleteChatAttachment: 'ChatAttachment',
   uploadWikiSource: 'WikiSource', getWikiSource: 'WikiSource', withdrawWikiSource: 'WikiSource',
   createWikiInboxRun: 'WikiOperation', createWikiOutboxRun: 'WikiOperation', createWikiSyncRun: 'WikiOperation', getWikiOperation: 'WikiOperation',
   listWikiCategories: 'Categories', getWikiCategoryIndex: 'CategoryIndex', getCompletion: 'Completion', listCompletions: 'CompletionCollection',
@@ -61,6 +62,7 @@ export function validateResponse(id: string, value: unknown, version: ContractVe
     const capability = value as { protocol_version?: unknown; contract_version?: unknown; supported_contract_versions?: unknown; legacy_v2_mode?: unknown } | null;
     if (!capability || capability.protocol_version !== version || version === 3 && (capability.contract_version !== 3 || !Array.isArray(capability.supported_contract_versions) || !capability.supported_contract_versions.includes(2) || !capability.supported_contract_versions.includes(3) || capability.legacy_v2_mode !== 'historical_reads_replay_only')) throw new CompatibilityError('Server capabilities do not acknowledge the selected contract');
   }
+  if (id === 'listChatAttachments') validateContractValue('ChatAttachmentCollection', { data: value }, version);
   const name = responseSchemas[id];
   return name ? validateContractValue(name, value, version) : value;
 }

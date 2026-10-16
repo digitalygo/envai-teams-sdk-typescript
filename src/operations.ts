@@ -17,6 +17,11 @@ export const operations = {
         "name": "X-Envai-Contract-Version",
         "in": "header",
         "required": true
+      },
+      {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false
       }
     ],
     "bodyMime": "application/json",
@@ -984,6 +989,204 @@ export const operations = {
     "bodyMime": "application/json",
     "bodyRequired": false,
     "mode": "json",
+    "unwrap": false
+  },
+  "uploadChatAttachment": {
+    "id": "uploadChatAttachment",
+    "method": "POST",
+    "path": "/workspaces/{workspace_id}/chats/{chat_id}/attachments",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "chat_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      },
+      {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true
+      }
+    ],
+    "bodyMime": "multipart/form-data",
+    "bodyRequired": true,
+    "mode": "json",
+    "unwrap": true
+  },
+  "listChatAttachments": {
+    "id": "listChatAttachments",
+    "method": "GET",
+    "path": "/workspaces/{workspace_id}/chats/{chat_id}/attachments",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "chat_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": true
+  },
+  "getChatAttachment": {
+    "id": "getChatAttachment",
+    "method": "GET",
+    "path": "/workspaces/{workspace_id}/chats/{chat_id}/attachments/{attachment_id}",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "chat_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      },
+      {
+        "name": "attachment_id",
+        "in": "path",
+        "required": true
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": true
+  },
+  "deleteChatAttachment": {
+    "id": "deleteChatAttachment",
+    "method": "DELETE",
+    "path": "/workspaces/{workspace_id}/chats/{chat_id}/attachments/{attachment_id}",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "chat_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      },
+      {
+        "name": "attachment_id",
+        "in": "path",
+        "required": true
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": true
+  },
+  "retryChatAttachment": {
+    "id": "retryChatAttachment",
+    "method": "POST",
+    "path": "/workspaces/{workspace_id}/chats/{chat_id}/attachments/{attachment_id}/retry",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "chat_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      },
+      {
+        "name": "attachment_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": true
+  },
+  "downloadChatAttachment": {
+    "id": "downloadChatAttachment",
+    "method": "GET",
+    "path": "/workspaces/{workspace_id}/chats/{chat_id}/attachments/{attachment_id}/download",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "chat_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      },
+      {
+        "name": "attachment_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "kind",
+        "in": "query",
+        "required": true
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "binary",
     "unwrap": false
   },
   "uploadWikiSource": {

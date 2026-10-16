@@ -25,7 +25,7 @@ for(const item of fixture('operations.json'))test(`inventory and wire: ${item.id
 });
 test('all inventory methods and service aliases available, secrets hidden',()=>{
  const c=new EnvaiClient({baseUrl,apiKey:'do-not-expose'});
- assert.equal(Object.keys(operations).length,65);assert.ok(c.chats.sendMessage&&c.workspaceFiles.convertToPdf&&c.images.models&&c.apiKeys.create);
+ assert.equal(Object.keys(operations).length,71);assert.ok(c.chats.sendMessage&&c.workspaceFiles.convertToPdf&&c.images.models&&c.apiKeys.create);
  assert.ok(!JSON.stringify(c).includes('do-not-expose'));
 });
 test('origin base normalization, prefix preservation, JWKS override and query encoding',async()=>{

@@ -13,3 +13,4 @@ export * from './wiki.js';
 export * from './wiki-webhooks.js';
 export * from './wiki-inbox.js';
 export * from './legacy-event-types.js';
+export * from './attachments.js';

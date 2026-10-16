@@ -24,3 +24,7 @@ Legacy mode refuses mutations and wiki APIs. V2 completion reads require truthfu
 The generated API includes both current canonical methods and explicit `getCapabilitiesLegacy` / `streamChatEventsLegacy` transport methods. Canonical stream helpers use the configured selection. A v3 client cannot invoke an explicitly legacy method accidentally. See [Wiki integration](WIKI.md) for all source, catalog, webhook and durable-outbox methods and public/internal capability boundaries.
 
 The `events()` iterator in read-only contract 2 buffers and validates the complete finite replay before yielding any event. A mixed-version/malformed/truncated tail, cancellation or buffer overflow exposes no prefix. `maxLegacySnapshotBytes` defaults to 64 MiB of exact SSE wire bytes and may be configured explicitly; exceeding it fails instead of truncating. Legacy EOF ends iteration with no reconnect. V3 remains incremental. Low-level raw `Response` methods leave parsing to the caller.
+
+## Chat attachments and deferred Wiki outcomes
+
+Update to the matching backend before enabling attachment sends. Contract 3 remains selected, and `chat_attachments` is an additional capability requirement. Preserve message idempotency keys and ordered IDs; verify acceptance. Handle the new `deferred` Wiki file outcome. See [attachment integration](CHAT_ATTACHMENTS.md).

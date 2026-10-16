@@ -205,11 +205,21 @@ test('truncated finite legacy SSE tail is an atomic protocol error',async()=>{
 });
 test('shared schemas match the verified backend Git tree byte-for-byte',async()=>{
  const {createHash}=await import('node:crypto');const manifest=JSON.parse(readFileSync(new URL('../contracts/manifest.json',import.meta.url),'utf8'));
- assert.equal(manifest.commit,'c27963d0848540679bccf30d2aeab354097b1a38');assert.equal(manifest.operationCount,65);assert.equal(manifest.atpVersion,3);
+ assert.equal(manifest.commit,'96acf00162984af4a86a671f924c53a18960fae6');assert.equal(manifest.operationCount,71);assert.equal(manifest.atpVersion,3);
  assert.deepEqual(Object.keys(manifest.sources).sort(),['events-v2.json','events.json','openapi.yaml','terminal-snapshot.json','wiki.json']);
  for(const [name,source]of Object.entries(manifest.sources)){const bytes=readFileSync(new URL('../contracts/'+name,import.meta.url));assert.equal(bytes.length,source.bytes);assert.equal(createHash('sha256').update(bytes).digest('hex'),source.sha256);assert.equal(createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex'),source.git_blob_sha);assert.equal(source.repository_path,'packages/contracts/'+name);}
  const openapi=JSON.parse(readFileSync(new URL('../contracts/openapi.json',import.meta.url),'utf8'));const ids=Object.values(openapi.paths).flatMap(path=>Object.values(path).filter(x=>x?.operationId).map(x=>x.operationId));assert.deepEqual(ids.sort(),Object.keys(operations).sort());
  assert.ok(openapi.components.schemas.ImageGenerationRequest.properties.aspect_ratio.enum.every(x=>typeof x==='string'));
+});
+test('derived OpenAPI and shared attachment fixtures retain separate provenance',async()=>{
+ const {createHash}=await import('node:crypto');const manifest=JSON.parse(readFileSync(new URL('../contracts/manifest.json',import.meta.url),'utf8'));
+ assert.deepEqual(Object.keys(manifest.derived_artifacts),['openapi.json']);
+ assert.deepEqual(Object.keys(manifest.shared_fixtures),['failed.json','pending.json','ready.json','recoverable.json']);
+ for(const [collection,entries]of Object.entries({derived_artifacts:manifest.derived_artifacts,shared_fixtures:manifest.shared_fixtures}))for(const[name,entry]of Object.entries(entries)){
+  const bytes=readFileSync(new URL('../'+entry.snapshot_path,import.meta.url));assert.equal(createHash('sha256').update(bytes).digest('hex'),entry.sha256);assert.ok(entry.origin);
+  if(collection==='derived_artifacts'){assert.equal(bytes.length,entry.bytes);assert.equal(entry.source_repository_path,'packages/contracts/openapi.yaml');}
+  else assert.equal(entry.repository_path,'packages/contracts/fixtures/chat-attachments/'+name);
+ }
 });
 test('actual control-plane HTTP payloads hydrate through selected contracts with verified provenance',async()=>{
  const load=name=>JSON.parse(readFileSync(new URL('../testdata/control-plane-http/'+name+'.json',import.meta.url),'utf8'));
