@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { EnvaiClient, CompatibilityError, ProtocolError, uploadAttachmentFile, waitForAttachment, parseEvent } from '../dist/index.js';
+import { EnvaiClient, CompatibilityError, ConflictError, ProtocolError, uploadAttachmentFile, waitForAttachment, parseEvent, validateContractValue } from '../dist/index.js';
 import { json, capabilities, sse, event, chatId } from './helpers.mjs';
 const ready=JSON.parse(readFileSync(new URL('../testdata/chat-attachments/ready.json',import.meta.url))).data;
 const pending=JSON.parse(readFileSync(new URL('../testdata/chat-attachments/pending.json',import.meta.url))).data;
 const failed=JSON.parse(readFileSync(new URL('../testdata/chat-attachments/failed.json',import.meta.url))).data;
-const caps={...capabilities,features:['chat_attachments']};
+const originalReady=JSON.parse(readFileSync(new URL('../testdata/chat-attachments/original-ready.json',import.meta.url))).data;
+const caps={...capabilities,features:['chat_attachments','chat_attachment_originals']};
 const params={workspace_id:'w/a',chat_id:'c/b',attachment_id:ready.attachment_id};
 const client=fetch=>new EnvaiClient({baseUrl:'https://api.example',fetch:async(u,i)=>u.endsWith('/capabilities')?json(caps):fetch(u,i)});
 for(const [method,extra,http] of [['upload',{idempotencyKey:'upload',body:{file:new File(['data'],'notes.txt')}},'POST'],['get',{},'GET'],['retry',{idempotencyKey:'retry'},'POST'],['delete',{},'DELETE']])test('attachments '+method+' preserves scope, headers and resource',async()=>{
@@ -98,4 +99,60 @@ test('polling waits for scheduled recovery without requesting retry',async()=>{
  const c=client(async(u,i)=>{assert.equal(i.method,'GET');return json({data:++reads===1?recoverable:ready});});
  assert.equal((await waitForAttachment(c,'w','c','a',{intervalMs:1,timeoutMs:1000})).lifecycle,'ready');
  assert.equal(reads,2);
+});
+test('native original readiness is ready-only and preserves existing terminal states',async()=>{
+ const uploaded={...originalReady,lifecycle:'uploaded'};
+ let reads=0;
+ const c=client(async(u,i)=>{assert.equal(i.method,'GET');return json({data:++reads===1?uploaded:originalReady});});
+ const result=await waitForAttachment(c,'w','c','a',{intervalMs:1,timeoutMs:1000});
+ assert.equal(result.lifecycle,'ready');assert.equal(result.conversion.status,'not_required');assert.equal(result.derived,null);assert.equal(reads,2);
+ for(const value of [originalReady,ready,failed,{...pending,lifecycle:'deleted'}])assert.deepEqual(await waitForAttachment(client(async()=>json({data:value})),'w','c','a'),value);
+});
+test('native upload requires both canonical features before any multipart POST',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'envai-native-'));const path=join(dir,'native.txt');writeFileSync(path,'native bytes');
+ try{
+  for(const features of [
+   ['chat_attachments'],
+   ['chat_attachment_originals'],
+   ['chat_attachments','chat_attachment_originals_beta'],
+   {chat_attachments:true},
+   {chat_attachments:true,chat_attachment_originals:false},
+   {chat_attachments:true,chat_attachment_originals:'true'},
+   ['chat_attachments','chat_attachment_originals',42],
+   ['chat_attachments',null],
+  ])for(const method of ['helper','low']){
+   const requests=[];const c=new EnvaiClient({baseUrl:'https://api.example',fetch:async(u,i)=>{requests.push([new URL(u).pathname,i.method]);return json({...caps,features});}});
+   const upload=method==='helper'?uploadAttachmentFile(c,'w','c',path,'stable-upload'):c.attachments.upload({...params,idempotencyKey:'stable-upload',body:{file:new File(['native bytes'],'native.txt')}});
+   await assert.rejects(upload,CompatibilityError);
+   assert.deepEqual(requests,[['/api/v1/atp/v3/capabilities','GET']]);
+  }
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+test('native upload accepts a positive feature list or exact true map with one preflight',async()=>{
+ for(const features of [['chat_attachments','chat_attachment_originals'],{chat_attachments:true,chat_attachment_originals:true}]){
+  let body;const requests=[];const c=new EnvaiClient({baseUrl:'https://api.example',fetch:async(u,i)=>{requests.push([new URL(u).pathname,i.method]);if(i.method==='POST')body=i.body;return u.endsWith('/capabilities')?json({...caps,features}):json({data:originalReady},202);}});
+  assert.deepEqual(await c.attachments.upload({...params,idempotencyKey:'listed-upload',body:{file:new File(['native bytes'],'native.txt')}}),originalReady);
+  assert.deepEqual(requests,[['/api/v1/atp/v3/capabilities','GET'],['/api/v1/workspaces/w%2Fa/chats/c%2Fb/attachments','POST']]);
+  assert.ok(body instanceof FormData);assert.equal(await body.get('file').text(),'native bytes');assert.equal(body.get('file').name,'native.txt');
+ }
+});
+test('attachment operations other than native upload require only chat_attachments',async()=>{
+ let posts=0;const c=new EnvaiClient({baseUrl:'https://api.example',fetch:async(u,i)=>{if(i.method==='POST')posts++;if(u.endsWith('/capabilities'))return json({...caps,features:['chat_attachments']});if(u.endsWith('/messages'))return json({status:'accepted',turn_id:'cmpl_01ARZ3NDEKTSV4RRFFQ69G5FAV',attachment_ids:['a']},202);return json({data:ready},202);}});
+ assert.equal((await c.attachments.get(params)).lifecycle,'ready');
+ assert.equal((await c.attachments.retry({...params,idempotencyKey:'retry'})).lifecycle,'ready');
+ assert.equal((await c.attachments.delete(params)).lifecycle,'ready');
+ assert.equal((await c.sendChatMessage({chat_id:'c',idempotencyKey:'send',body:{message:'read',attachment_ids:['a']}})).status,'accepted');
+ assert.equal(posts,2);
+});
+test('native retry conflict is returned without resubmission',async()=>{
+ let gets=0,posts=0;
+ const c=new EnvaiClient({baseUrl:'https://api.example',fetch:async(u,i)=>{if(u.endsWith('/capabilities')){gets++;return json(caps);}posts++;return json({error:{type:'conflict',code:'attachment_retry_not_permitted',message:'Native originals cannot be retried'}},409);}});
+ await assert.rejects(c.attachments.retry({...params,idempotencyKey:'retry'}),e=>e instanceof ConflictError&&e.code==='attachment_retry_not_permitted');
+ assert.equal(gets,1);assert.equal(posts,1);
+});
+test('native manifest and conversion enums hydrate',()=>{
+ const manifest={attachment_id:originalReady.attachment_id,original_name:originalReady.original_name,mime_type:originalReady.mime_type,mode:'native',revision:1,sha256:'a'.repeat(64),bytes:17,conversion:{status:'not_required'}};
+ assert.deepEqual(validateContractValue('AttachmentManifest',manifest),manifest);
+ assert.throws(()=>validateContractValue('AttachmentManifest',{...manifest,mode:'converted'}),ProtocolError);
+ assert.equal(validateContractValue('ChatAttachment',originalReady).conversion.status,'not_required');
 });

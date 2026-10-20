@@ -1,10 +1,10 @@
 # Wiki V1 / contract 3 validation
 
-## Chat attachments contract update (2026-10-16)
+## Chat attachments contract update (2026-10-20)
 
-Current source schemas are pinned to backend commit `6a4e45bafe6f5856ef92a57b37db08769738b412`: 71 HTTP operations, 115 HTTP models and 29 ATP event types. The manifest separates exact upstream YAML/JSON schemas, the generated OpenAPI JSON representation, and shared synthetic attachment fixtures. Historical v2 provenance remains unchanged. See [chat attachments](CHAT_ATTACHMENTS.md) for conversion, context, retention and retry semantics. Publishing the SDK does not deploy the backend.
+Current source schemas are pinned to backend commit `7192fc05ebec817bddc705186c8f195cc0dc5ec5`: 71 HTTP operations, 115 HTTP models and 29 ATP event types. The manifest separates exact upstream YAML/JSON schemas, the generated OpenAPI JSON representation, and shared synthetic attachment fixtures. Historical v2 provenance remains unchanged. See [chat attachments](CHAT_ATTACHMENTS.md) for conversion, context, retention and retry semantics. Publishing the SDK does not deploy the backend.
 
-Local checks: 288 tests passed with PostgreSQL and no skips; line coverage 99.75%, branch coverage 97.45%. Typechecking, deterministic generation, packed import and dependency audit passed.
+Local checks (Node 24.20.0, real disposable PostgreSQL 18): `npm run check` passed 309 tests with zero failures/skips; line coverage 99.81%, branch coverage 97.50%, function coverage 99.11%. `npm run check:package`, release-tooling checks, and dependency audits passed.
 
 ## Earlier validation records
 

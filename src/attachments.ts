@@ -21,7 +21,7 @@ export async function waitForAttachment(client: EnvaiClient, workspaceId: string
     for (;;) {
       signal.throwIfAborted();
       const value = await client.getChatAttachment({ workspace_id: workspaceId, chat_id: chatId, attachment_id: attachmentId }, { ...options, signal });
-      if (value.conversion.status === 'completed' || value.conversion.status === 'failed' && !value.conversion.recoverable || value.lifecycle === 'deleted' || value.lifecycle === 'deleting') return value;
+      if (value.conversion.status === 'completed' || value.conversion.status === 'failed' && !value.conversion.recoverable || value.conversion.status === 'not_required' && value.lifecycle === 'ready' || value.lifecycle === 'deleted' || value.lifecycle === 'deleting') return value;
       await delay(interval, signal);
     }
   } finally { clearTimeout(timer); }

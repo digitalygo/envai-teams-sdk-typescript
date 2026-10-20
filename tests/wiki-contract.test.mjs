@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { EnvaiClient, HttpTransport, CompatibilityError, ProtocolError, TransportError, parseEvent, validateContractValue, uploadSourceFile, waitForSource, waitForWikiOperation, operations } from '../dist/index.js';
+import { EnvaiClient, HttpTransport, CompatibilityError, ProtocolError, TransportError, hasCapabilityFeature, isCapabilityFeatures, parseEvent, validateContractValue, uploadAttachmentFile, uploadSourceFile, waitForSource, waitForWikiOperation, operations } from '../dist/index.js';
 import { json, sse, event, chatId, capabilities, negotiatedFetch } from './helpers.mjs';
 export const wikiFixture = name => JSON.parse(readFileSync(new URL('../testdata/wiki/'+name+'.json',import.meta.url),'utf8'));
 const source=wikiFixture('source-accepted').data, operation=wikiFixture('operation-completed').data;
@@ -205,7 +205,9 @@ test('truncated finite legacy SSE tail is an atomic protocol error',async()=>{
 });
 test('shared schemas match the verified backend Git tree byte-for-byte',async()=>{
  const {createHash}=await import('node:crypto');const manifest=JSON.parse(readFileSync(new URL('../contracts/manifest.json',import.meta.url),'utf8'));
- assert.equal(manifest.commit,'6a4e45bafe6f5856ef92a57b37db08769738b412');assert.equal(manifest.operationCount,71);assert.equal(manifest.atpVersion,3);
+ assert.equal(manifest.commit,'7192fc05ebec817bddc705186c8f195cc0dc5ec5');assert.equal(manifest.operationCount,71);assert.equal(manifest.atpVersion,3);
+ assert.equal(manifest.sha256['events-v2.json'],'88d41835f88c0cc4ad071b06ed4623882c6b64144baf312c4a095504c98cd7d6');
+ assert.equal(createHash('sha256').update(readFileSync(new URL('../contracts/openapi-v2.json',import.meta.url))).digest('hex'),'bbe7fcc23415e25012fdb88f1931fd8d12a96f7884de8d58c875459a557c5155');
  assert.deepEqual(Object.keys(manifest.sources).sort(),['events-v2.json','events.json','openapi.yaml','terminal-snapshot.json','wiki.json']);
  for(const [name,source]of Object.entries(manifest.sources)){const bytes=readFileSync(new URL('../contracts/'+name,import.meta.url));assert.equal(bytes.length,source.bytes);assert.equal(createHash('sha256').update(bytes).digest('hex'),source.sha256);assert.equal(createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex'),source.git_blob_sha);assert.equal(source.repository_path,'packages/contracts/'+name);}
  const openapi=JSON.parse(readFileSync(new URL('../contracts/openapi.json',import.meta.url),'utf8'));const ids=Object.values(openapi.paths).flatMap(path=>Object.values(path).filter(x=>x?.operationId).map(x=>x.operationId));assert.deepEqual(ids.sort(),Object.keys(operations).sort());
@@ -240,4 +242,95 @@ test('legacy duplicate, backwards and pre-cursor sequences fail atomically; v3 d
  for(const [events,options]of [[[event('turn.started',1),event('turn.completed',1)],{}],[[event('turn.started',1),event('agent.text.delta',2),event('turn.completed',1)],{}],[[event('turn.started',2),event('turn.completed',1)],{after:1,resume:'same-runtime'}],[[event('turn.started',1)],{after:1,resume:'same-runtime'}]]){
   const c=new EnvaiClient({baseUrl,contractVersion:2,fetch:async()=>{const r=sse(events);r.headers.set('X-Envai-Contract-Version','2');return r;}});const got=[];await assert.rejects(async()=>{for await(const e of c.events(chatId,options))got.push(e);},/duplicate or backwards/);assert.equal(got.length,0);
  }
+});
+test('canonical capabilities fixture matches provenance and accepts list or strict map',async()=>{
+ const {createHash}=await import('node:crypto');
+ const fixture=JSON.parse(readFileSync(new URL('../testdata/capabilities/canonical-v3.json',import.meta.url),'utf8'));
+ const provenance=JSON.parse(readFileSync(new URL('../testdata/capabilities/provenance.json',import.meta.url),'utf8'));
+ assert.equal(provenance.source_repository,'digitalygo/envai-teams');
+ assert.equal(provenance.source_path,'apps/execution-plane/internal/gateway/capabilities.go');
+ assert.equal(provenance.source_commit,'7192fc05ebec817bddc705186c8f195cc0dc5ec5');
+ assert.equal(provenance.captured_source_commit,'6c3202118b914d2b2ff68577edb44495bfa1ca3b');
+ assert.equal(provenance.sdk_reference_commit,'93eafc02271035065ac975f91cd4f77d148c9d2c');
+ assert.equal(provenance.files['canonical-v3.json'],createHash('sha256').update(readFileSync(new URL('../testdata/capabilities/canonical-v3.json',import.meta.url))).digest('hex'));
+ const listed=await new EnvaiClient({baseUrl,fetch:async()=>json(fixture.body)}).getCapabilities();
+ assert.deepEqual(listed.features,fixture.body.features);
+ const mapped=await new EnvaiClient({baseUrl,fetch:async()=>json({...fixture.body,features:{chat_attachments:true,chat_attachment_originals:true,wiki_original_sources:true,wiki_original_sources_beta:false}})}).getCapabilities();
+ assert.deepEqual(mapped.features,['chat_attachments','chat_attachment_originals','wiki_original_sources']);
+ for(const features of ['wiki_original_sources',[1],['wiki_original_sources',42],{wiki_original_sources:'true'},{wiki_original_sources:1},null])await assert.rejects(new EnvaiClient({baseUrl,fetch:async()=>json({...fixture.body,features})}).getCapabilities(),CompatibilityError);
+});
+test('canonical capabilities drive native attachment upload with one preflight',async()=>{
+ const fixture=JSON.parse(readFileSync(new URL('../testdata/capabilities/canonical-v3.json',import.meta.url),'utf8'));
+ const attachment=JSON.parse(readFileSync(new URL('../testdata/chat-attachments/original-ready.json',import.meta.url),'utf8')).data;
+ const dir=mkdtempSync(join(tmpdir(),'envai-canonical-'));const path=join(dir,'native.txt');writeFileSync(path,'canonical bytes');
+ try{
+  const requests=[];let body;const c=new EnvaiClient({baseUrl:'https://envai.example',fetch:async(u,i)=>{requests.push([new URL(u).pathname,i.method]);if(i.method==='POST')body=i.body;return u.endsWith('/capabilities')?json(fixture.body):json({data:attachment},202);}});
+  assert.equal((await uploadAttachmentFile(c,'w','c',path,'canonical-key')).attachment_id,attachment.attachment_id);
+  assert.deepEqual(requests,[['/api/v1/atp/v3/capabilities','GET'],['/api/v1/workspaces/w/chats/c/attachments','POST']]);
+  assert.equal(await body.get('file').text(),'canonical bytes');assert.equal(body.get('file').name,'native.txt');
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+test('wiki wait recognizes original inbox readiness without starting indexing',async()=>{
+ const original=wikiFixture('source-original-ready').data;
+ const uploaded={...original,lifecycle:'uploaded',indexing:{status:'pending_conversion'}};
+ const requests=[];let reads=0;
+ const c=new EnvaiClient({baseUrl,fetch:async(u,i)=>{requests.push([new URL(u).pathname,i.method]);return json({data:++reads===1?uploaded:original});}});
+ assert.deepEqual(await waitForSource(c,'w','f',{intervalMs:1,timeoutMs:100}),original);
+ assert.deepEqual(requests,[['/api/v1/workspaces/w/files/sources/f','GET'],['/api/v1/workspaces/w/files/sources/f','GET']]);
+ assert.equal(validateContractValue('WikiSource',original).conversion.status,'not_required');
+ const raw={...original,lifecycle:'raw',indexing:{status:'processed'}};
+ assert.deepEqual(await waitForSource(new EnvaiClient({baseUrl,fetch:async()=>json({data:raw})}),'w','f',{timeoutMs:100}),raw);
+});
+test('original wiki helper and low-level upload require wiki_original_sources before multipart',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'envai-wiki-original-'));const path=join(dir,'source.txt');writeFileSync(path,'original bytes');
+ const source=wikiFixture('source-original-ready').data;
+ try{
+  for(const features of [[],['chat_attachments'],{wiki_original_sources:false},{wiki_original_sources:'true'},{wiki_original_sources_beta:true},['wiki_original_sources',42]])for(const method of ['helper','low']){
+   const requests=[];const c=new EnvaiClient({baseUrl:'https://envai.example',fetch:async(u,i)=>{requests.push([new URL(u).pathname,i.method]);return json({...capabilities,features});}});
+   const upload=method==='helper'?uploadSourceFile(c,'w',path,'original-key',{processing:'original'}):c.uploadWikiSource({workspace_id:'w',idempotencyKey:'original-key',body:{file:new File(['original bytes'],'source.txt'),processing:'original'}});
+   await assert.rejects(upload,CompatibilityError);
+   assert.deepEqual(requests,[['/api/v1/atp/v3/capabilities','GET']]);
+  }
+  for(const features of [['wiki_original_sources'],{wiki_original_sources:true}]){
+   const requests=[];let body;const c=new EnvaiClient({baseUrl:'https://envai.example',fetch:async(u,i)=>{requests.push([new URL(u).pathname,i.method]);if(i.method==='POST')body=i.body;return u.endsWith('/capabilities')?json({...capabilities,features}):json({data:source},202);}});
+   assert.equal((await uploadSourceFile(c,'w',path,'original-key',{processing:'original',filename:'source.txt',mimeType:'text/plain'})).conversion.status,'not_required');
+   assert.deepEqual(requests,[['/api/v1/atp/v3/capabilities','GET'],['/api/v1/workspaces/w/files/sources','POST']]);
+   assert.equal(body.get('processing'),'original');assert.equal(body.get('file').name,'source.txt');assert.equal(await body.get('file').text(),'original bytes');
+  }
+  const requests=[];let body;const c=new EnvaiClient({baseUrl:'https://envai.example',fetch:async(u,i)=>{requests.push([new URL(u).pathname,i.method]);if(i.method==='POST')body=i.body;return u.endsWith('/capabilities')?json({...capabilities,features:{wiki_original_sources:true}}):json({data:source},202);}});
+  assert.equal((await c.uploadWikiSource({workspace_id:'w',idempotencyKey:'low-key',body:{file:new File(['low bytes'],'low.txt'),processing:'original'}})).conversion.status,'not_required');
+  assert.deepEqual(requests,[['/api/v1/atp/v3/capabilities','GET'],['/api/v1/workspaces/w/files/sources','POST']]);
+  assert.equal(body.get('processing'),'original');assert.equal(await body.get('file').text(),'low bytes');
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+test('wiki upload omits processing for default and explicit convert and rejects invalid modes',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'envai-wiki-convert-'));const path=join(dir,'source.txt');writeFileSync(path,'converted bytes');
+ const source=wikiFixture('source-accepted').data;
+ try{
+  for(const options of [{},{processing:'convert'}])for(const features of [[]]){
+   let body;const requests=[];const c=new EnvaiClient({baseUrl:'https://envai.example',fetch:async(u,i)=>{requests.push([new URL(u).pathname,i.method]);if(i.method==='POST')body=i.body;return u.endsWith('/capabilities')?json({...capabilities,features}):json({data:source},202);}});
+   await uploadSourceFile(c,'w',path,'convert-key',options);
+   assert.deepEqual(requests,[['/api/v1/atp/v3/capabilities','GET'],['/api/v1/workspaces/w/files/sources','POST']]);
+   assert.equal(body.has('processing'),false);assert.equal(await body.get('file').text(),'converted bytes');
+  }
+  for(const action of [
+   ()=>uploadSourceFile(new EnvaiClient({baseUrl:'https://envai.example',fetch:async()=>{throw Error('must not send');}}),'w',path,'key',{processing:'ocr'}),
+   ()=>new EnvaiClient({baseUrl:'https://envai.example',fetch:async()=>{throw Error('must not send');}}).uploadWikiSource({workspace_id:'w',idempotencyKey:'key',body:{file:new File(['x'],'x.txt'),processing:'ocr'}}),
+  ])await assert.rejects(action(),e=>e instanceof TypeError||e instanceof CompatibilityError);
+  let body;const low=new EnvaiClient({baseUrl:'https://envai.example',fetch:async(u,i)=>{if(i.method==='POST')body=i.body;return u.endsWith('/capabilities')?json({...capabilities,features:[]}):json({data:source},202);}});
+  await low.uploadWikiSource({workspace_id:'w',idempotencyKey:'key',body:{file:new File(['x'],'x.txt'),processing:'convert'}});
+  assert.equal(body.has('processing'),false);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+test('feature advertisement guard accepts strict maps and rejects malformed shapes',()=>{
+ assert.equal(hasCapabilityFeature(['chat_attachments'],'chat_attachments'),true);
+ assert.equal(hasCapabilityFeature(['chat_attachments',1],'chat_attachments'),false);
+ assert.equal(hasCapabilityFeature({chat_attachments:true,chat_attachment_originals:false},'chat_attachments'),true);
+ assert.equal(hasCapabilityFeature({chat_attachments:false},'chat_attachments'),false);
+ assert.equal(hasCapabilityFeature({chat_attachments:'true'},'chat_attachments'),false);
+ assert.equal(hasCapabilityFeature(null,'chat_attachments'),false);
+ assert.equal(isCapabilityFeatures([]),true);
+ assert.equal(isCapabilityFeatures({wiki_original_sources:true}),true);
+ assert.equal(isCapabilityFeatures([1]),false);
+ assert.equal(isCapabilityFeatures({wiki_original_sources:1}),false);
 });

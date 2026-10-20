@@ -26,7 +26,7 @@ function legacyCost(raw: unknown) {
   const parsed = parseEvent(raw, 2);
   if (parsed.known && parsed.type === 'turn.completed') { const amount: number = parsed.data.cost; return amount; }
 }
-function sourceState(source: WikiSource) { const status: 'queued' | 'running' | 'completed' | 'failed' = source.conversion.status; return status; }
+function sourceState(source: WikiSource) { const status: 'queued' | 'running' | 'completed' | 'failed' | 'not_required' = source.conversion.status; return status; }
 function webhookState(event: WikiWebhookEvent) {
   if (event.event_type === 'wiki.inbox.file.processed') { const revision: number = event.source_revision; return revision; }
   if (event.event_type === 'wiki.outbox.file.deleted') { const old: string | null = event.previous_canonical_raw_path; return old; }

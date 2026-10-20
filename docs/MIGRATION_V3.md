@@ -27,4 +27,4 @@ The `events()` iterator in read-only contract 2 buffers and validates the comple
 
 ## Chat attachments and deferred Wiki outcomes
 
-Update to the matching backend before enabling attachment sends. Contract 3 remains selected, and `chat_attachments` is an additional capability requirement. Preserve message idempotency keys and ordered IDs; verify acceptance. Handle the new `deferred` Wiki file outcome. See [attachment integration](CHAT_ATTACHMENTS.md).
+Update to the matching backend before enabling attachment sends. Contract 3 remains selected, and native uploads require both `chat_attachments` and `chat_attachment_originals`; other attachment operations and attachment messages keep the existing `chat_attachments` requirement. Preserve message idempotency keys and ordered IDs; verify acceptance. Handle the new `deferred` Wiki file outcome. See [attachment integration](CHAT_ATTACHMENTS.md).

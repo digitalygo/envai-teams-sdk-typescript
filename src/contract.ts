@@ -4,6 +4,17 @@ import addFormats from 'ajv-formats';
 import { ProtocolError } from './errors.js';
 
 export type ContractVersion = 2 | 3;
+export type CapabilityFeatures = string[] | Record<string, boolean>;
+export function isCapabilityFeatures(value: unknown): value is CapabilityFeatures {
+  if (Array.isArray(value)) return value.every(feature => typeof feature === 'string');
+  if (!value || typeof value !== 'object') return false;
+  return Object.keys(value).every(key => typeof (value as Record<string, unknown>)[key] === 'boolean');
+}
+export function hasCapabilityFeature(value: unknown, name: string): boolean {
+  if (Array.isArray(value)) return value.every(feature => typeof feature === 'string') && value.includes(name);
+  if (!value || typeof value !== 'object') return false;
+  return Object.keys(value).every(key => typeof (value as Record<string, unknown>)[key] === 'boolean') && (value as Record<string, unknown>)[name] === true;
+}
 export class CompatibilityError extends ProtocolError {
   constructor(message = 'Server does not support the selected Envai contract; no automatic downgrade or mutation resubmission is safe') { super(message); }
 }
@@ -38,7 +49,7 @@ function assertLegacyUsageCosts(value: unknown): void {
 
 export function validateContractValue<T>(name: string, value: unknown, version: ContractVersion = 3): T {
   if (version !== 2 && version !== 3) throw new CompatibilityError('Unsupported selected contract version');
-  const root = ['Completion', 'CompletionCollection', 'ChatAttachment', 'ChatAttachmentCollection', 'ChatMessageAccepted'].includes(name) ? `urn:envai:http:v${version}#/components/schemas/` : 'urn:envai:wiki#/$defs/';
+  const root = ['Completion', 'CompletionCollection', 'ChatAttachment', 'ChatAttachmentCollection', 'AttachmentManifest', 'ChatMessageAccepted'].includes(name) ? `urn:envai:http:v${version}#/components/schemas/` : 'urn:envai:wiki#/$defs/';
   const ref = root + name;
   let validate = validators.get(ref);
   if (!validate) { validate = ajv.compile({ $ref: ref }); validators.set(ref, validate); }
@@ -61,7 +72,10 @@ const responseSchemas: Record<string, string> = {
 export function validateResponse(id: string, value: unknown, version: ContractVersion): unknown {
   if (['getCapabilities', 'getCapabilitiesLegacy', 'negotiateContract'].includes(id)) {
     const capability = value as { protocol_version?: unknown; contract_version?: unknown; supported_contract_versions?: unknown; legacy_v2_mode?: unknown; features?: unknown } | null;
-    if (!capability || capability.protocol_version !== version || version === 3 && (capability.contract_version !== 3 || !Array.isArray(capability.supported_contract_versions) || !capability.supported_contract_versions.includes(2) || !capability.supported_contract_versions.includes(3) || capability.legacy_v2_mode !== 'historical_reads_replay_only' || !Array.isArray(capability.features) || capability.features.some(feature => typeof feature !== 'string'))) throw new CompatibilityError('Server capabilities do not acknowledge the selected contract');
+    if (!capability || capability.protocol_version !== version || version === 3 && (capability.contract_version !== 3 || !Array.isArray(capability.supported_contract_versions) || !capability.supported_contract_versions.includes(2) || !capability.supported_contract_versions.includes(3) || capability.legacy_v2_mode !== 'historical_reads_replay_only' || !isCapabilityFeatures(capability.features))) throw new CompatibilityError('Server capabilities do not acknowledge the selected contract');
+    if (version === 2 && capability.features !== undefined && !isCapabilityFeatures(capability.features)) throw new CompatibilityError('Server capabilities do not acknowledge the selected contract');
+    const features = capability.features;
+    if (features !== undefined && !Array.isArray(features)) value = { ...capability, features: Object.keys(features as Record<string, boolean>).filter(name => (features as Record<string, boolean>)[name]).map(name => name) };
   }
   if (id === 'listChatAttachments') validateContractValue('ChatAttachmentCollection', { data: value }, version);
   const name = responseSchemas[id];

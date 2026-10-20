@@ -1,7 +1,13 @@
-import { CompatibilityError, validateResponse, type ContractVersion } from './contract.js';
+import { CompatibilityError, hasCapabilityFeature, validateResponse, type ContractVersion } from './contract.js';
 import { apiError, EnvaiError, ProtocolError, TransportError } from './errors.js';
 export type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 export interface RequestOptions { signal?: AbortSignal; headers?: HeadersInit; }
+export type SourceProcessing = 'convert' | 'original';
+export function sourceProcessing(value: unknown): SourceProcessing {
+  if (value === undefined || value === 'convert') return 'convert';
+  if (value === 'original') return 'original';
+  throw new TypeError('Source processing must be convert or original');
+}
 export interface Observation {
   kind: 'request.start' | 'request.end' | 'request.retry' | 'stream.open' | 'stream.close' | 'stream.reconnect' | 'event' | 'tool.start' | 'tool.end';
   operation?: string; method?: string; status?: number; durationMs?: number; attempt?: number;
@@ -69,6 +75,7 @@ export class HttpTransport {
   observe(event: Observation): void { try { this.#observe?.(Object.freeze({ ...event })); } catch { /* Telemetry cannot change protocol behavior. */ } }
   async request<T>(operation: Operation, params: object, options: RequestOptions = {}): Promise<T> {
     const values = params as Record<string, unknown>;
+    const sourceMode = operation.id === 'uploadWikiSource' ? sourceProcessing((values.body as { processing?: unknown } | undefined)?.processing) : undefined;
     let path = operation.path;
     if (operation.id.endsWith('Legacy') && this.contractVersion !== 2) throw new CompatibilityError('Legacy operations require contractVersion: 2');
     const atp = path.startsWith('/chats/') || path.startsWith('/atp/v3/') || path === '/capabilities';
@@ -115,6 +122,7 @@ export class HttpTransport {
       if (operation.bodyMime === 'multipart/form-data') {
         const data = new FormData();
         for (const [key, value] of Object.entries(values.body as object)) {
+          if (operation.id === 'uploadWikiSource' && key === 'processing' && sourceMode === 'convert') continue;
           if (value instanceof Blob) data.append(key, value);
           else if (value !== undefined && value !== null) data.append(key, typeof value === 'string' ? value : JSON.stringify(value));
         }
@@ -125,7 +133,11 @@ export class HttpTransport {
     if (attachmentIds.length && !headers.has('Idempotency-Key')) throw new TypeError('Attachment messages require Idempotency-Key');
     if (negotiated && operation.method !== 'GET') {
       const capabilities = await this.negotiate(options);
-      if ((attachment || attachmentIds.length > 0) && !capabilities.features?.includes('chat_attachments')) throw new CompatibilityError('Server does not advertise chat_attachments');
+      if (operation.id === 'uploadChatAttachment') {
+        if (!hasCapabilityFeature(capabilities.features, 'chat_attachments')) throw new CompatibilityError('Server does not advertise chat_attachments');
+        if (!hasCapabilityFeature(capabilities.features, 'chat_attachment_originals')) throw new CompatibilityError('Server does not advertise chat_attachment_originals');
+      } else if ((attachment || attachmentIds.length > 0) && !hasCapabilityFeature(capabilities.features, 'chat_attachments')) throw new CompatibilityError('Server does not advertise chat_attachments');
+      if (operation.id === 'uploadWikiSource' && sourceMode === 'original' && !hasCapabilityFeature(capabilities.features, 'wiki_original_sources')) throw new CompatibilityError('Server does not advertise wiki_original_sources');
     }
     for (let attempt = 0; ; attempt++) {
       options.signal?.throwIfAborted();
