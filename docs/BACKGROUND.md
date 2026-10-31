@@ -1,7 +1,7 @@
 # Detached tasks and delegated jobs
 
 This SDK adds the native workflow contract pinned in `contracts/manifest.json`.
-Create a dedicated `new EnvaiClient({baseUrl, apiKey, nativeTasks:true})`. This explicitly sends `X-Envai-Extensions: native-tasks-v1` on capabilities, native mutations, turn admission, SSE/reconnects and tool results. Default clients omit the extension and preserve the existing foreground event shape. Native helpers and strict-model admission require this opt-in.
+Create a dedicated `new EnvaiClient({baseUrl, apiKey, nativeTasks:true})`. This explicitly sends `X-Envai-Extensions: native-tasks-v1` on capabilities, native mutations, turn admission, SSE/reconnects and tool results. Opt-in responses must acknowledge this extension before hydration. Default clients omit the extension and preserve the existing foreground event shape. Native helpers and strict-model admission require this opt-in.
 
 It requires a server advertising the relevant capability; it makes no claim
 about compatibility of previously published SDK packages.
@@ -34,7 +34,7 @@ if (task.status === 'completed') {
 
 `delegateAndWait` requires `delegated_job_lifecycle` as well as delegation and
 background capabilities. It opens target SSE and waits for its live subscription
-ping before submitting once. It keeps that stream open through origin task
+ping before submitting once. It buffers target replay until the receipt arrives, then establishes replay barriers and services still-pending signed calls; this also handles an exact `event_id` retry returning an existing job. Runners service pending tools on the target chat, so use a dedicated target chat when workflows require isolation. It keeps that stream open through origin task
 terminal status, including child cohorts and synthesis turns. Tools are verified
 and answered on their execution chat. The returned `task.output` is the final
 job output; `task.result_turn_id` identifies its final coordinator turn.
@@ -73,3 +73,5 @@ nonexecution. No helper resubmits paid work automatically. Classification
 on restart. Save successful results; pause and reconcile 502/503 or transport
 uncertainty. The phase request requires non-null JSON `task_context`, a positive
 integer `attempt`, and full final output. It never automatically retries POSTs.
+
+Servers project extension-only events to ignorable `chat.extension` placeholders for non-native subscribers, retaining original sequence IDs. Advance cursors through those placeholders. To recover previously hidden task payloads after changing mode, replay from an earlier cursor in the same resident runtime. Native clients keep the same mode on every reconnect.

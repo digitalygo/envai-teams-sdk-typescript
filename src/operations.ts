@@ -143,6 +143,11 @@ export const operations = {
         "required": true
       },
       {
+        "name": "X-Envai-Extensions",
+        "in": "header",
+        "required": false
+      },
+      {
         "name": "Idempotency-Key",
         "in": "header",
         "required": false
@@ -174,6 +179,11 @@ export const operations = {
         "name": "X-Envai-Contract-Version",
         "in": "header",
         "required": true
+      },
+      {
+        "name": "X-Envai-Extensions",
+        "in": "header",
+        "required": false
       }
     ],
     "bodyRequired": false,
@@ -328,6 +338,11 @@ export const operations = {
         "name": "X-Envai-Contract-Version",
         "in": "header",
         "required": true
+      },
+      {
+        "name": "X-Envai-Extensions",
+        "in": "header",
+        "required": false
       }
     ],
     "bodyRequired": false,

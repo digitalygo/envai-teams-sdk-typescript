@@ -41,7 +41,7 @@ test('task ownership cannot change under an existing call ID; task records rejec
  const result=event('agent.tool.result');result.data.call_id=requestEvent().data.call_id;await assert.rejects(r.instance.accept(wrapper(result,'other-task')),/ownership/);
  const record=await r.store.get(r.instance.key(chatId,result.data.call_id));assert.throws(()=>assertToolRecord(r.instance.key(chatId,result.data.call_id),{...record,taskId:''}));
 });
-function clientWith(fetch, advertised=features) {return new EnvaiClient({baseUrl:'https://example.test',nativeTasks:true,retry:{maxRetries:0},fetch:async(url,init)=>new URL(url).pathname.endsWith('/capabilities')?json({...capabilities,families:['turn','agent','chat','task'],features:advertised}):fetch(url,init)});}
+function clientWith(fetch, advertised=features) {return new EnvaiClient({baseUrl:'https://example.test',nativeTasks:true,retry:{maxRetries:0},fetch:async(url,init)=>{const response=await (new URL(url).pathname.endsWith('/capabilities')?json({...capabilities,families:['turn','agent','chat','task'],features:advertised}):fetch(url,init));response.headers.set('X-Envai-Extensions','native-tasks-v1');return response;}});}
 test('native primitives route exactly, retain typed states, and gate negotiated features',async()=>{
  const cases=[['deliverWorkflowResult',{chat_id:chatId,body:{workspace_id:'w',event_id:'e',origin_turn_id:turnId,task_id:'task',status:'blocked',output:'result'}},{event_id:'e',status:'failed',duplicate:false,error:'admission'},'deliveries'],['delegateToTeam',{chat_id:chatId,body},receipt,'delegations'],['getDetachedTask',{chat_id:chatId,task_id:'task'},terminal,'tasks/task'],['cancelDetachedTask',{chat_id:chatId,task_id:'task',body:{subtree:true}},{task_id:'task',status:'cancelled',subtree:true},'tasks/task/cancel'],['classifyPhase',{chat_id:chatId,body:{request_id:'once',task_context:{goal:'x'},phase_id:'review',attempt:1,final_output:'done'}},{request_id:'once',invocation_id:'inv',model:'fixed',decision:'NOT BLOCKED'},'classify-phase']];
  for(const [method,args,response,path] of cases) {
@@ -110,7 +110,7 @@ test('native extension is explicit and consistently selected for capabilities, s
  await assert.rejects(ordinary.sendChatMessage({chat_id:chatId,body:{message:'hello',strict_model:true}}),/nativeTasks/);
  await assert.rejects(ordinary.delegateAndWait(chatId,body),/nativeTasks/);
  await assert.rejects(async()=>{for await(const e of ordinary.taskEvents(chatId)){}},/nativeTasks/);
- const seen=[];const c=new EnvaiClient({baseUrl:'https://example.test',nativeTasks:true,fetch:async(url,init)=>{seen.push({url,headers:init.headers});return url.endsWith('/capabilities')?json({...capabilities,features}):new Response(null,{status:204,headers:{'X-Envai-Contract-Version':'3'}});}});
+ const seen=[];const c=new EnvaiClient({baseUrl:'https://example.test',nativeTasks:true,fetch:async(url,init)=>{seen.push({url,headers:init.headers});return url.endsWith('/capabilities')?json({...capabilities,features},200,{'X-Envai-Extensions':'native-tasks-v1'}):new Response(null,{status:204,headers:{'X-Envai-Contract-Version':'3','X-Envai-Extensions':'native-tasks-v1'}});}});
  await c.resolveChatTool({chat_id:chatId,body:{call_id:requestEvent().data.call_id,output:'done',is_error:false}});
  assert.equal(seen.length,2);assert.ok(seen.every(r=>r.headers.get('X-Envai-Extensions')==='native-tasks-v1'));
  await assert.rejects(c.getCapabilities({}, {headers:{'X-Envai-Extensions':'other'}}),TypeError);
@@ -140,4 +140,29 @@ test('foreground send helper never dispatches replayed detached requests before 
   emit(event('turn.completed',2));return json({status:'accepted',turn_id:turnId});
  });
  await c.sendAndWait(chatId,{message:'hello'},{toolRunner:r.instance});await r.instance.drain();assert.equal(r.posts.length,0);
+});
+
+test('native response acknowledgment is mandatory before hydration or stream dispatch',async()=>{
+ for(const extension of [undefined,'other']) {
+  const c=new EnvaiClient({baseUrl:'https://example.test',nativeTasks:true,fetch:async()=>json({...capabilities,features},200,extension?{'X-Envai-Extensions':extension}:{})});
+  await assert.rejects(c.getCapabilities(),/extension acknowledgment/);
+ }
+ let posts=0;
+ const c=new EnvaiClient({baseUrl:'https://example.test',nativeTasks:true,fetch:async(url)=>url.endsWith('/capabilities')?json({...capabilities,features},200,{'X-Envai-Extensions':'native-tasks-v1'}):(posts++,json(receipt))});
+ await assert.rejects(c.delegateToTeam({chat_id:chatId,body}),/outcome may be unknown/);assert.equal(posts,1);
+});
+test('legacy projected neutral events preserve sequence and remain ignorable',()=>{
+ const neutral={...event('turn.completed'),v:3,type:'chat.extension',turn_id:null,agent:null,data:{}};
+ const parsed=parseEvent(neutral);assert.equal(parsed.known,false);assert.equal(parsed.seq,neutral.seq);
+});
+
+test('exact delegation receipt retry services a signed pending replay before waiting for final job',async()=>{
+ const r=runner();let controller,submitted=false;
+ const c=clientWith(async(url)=>{
+  if(url.includes('/events'))return new Response(new ReadableStream({start(c){controller=c;for(const e of [wrapper(),event('ping',0)])c.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(e)}\n\n`));}}),{headers:{'content-type':'text/event-stream','X-Envai-Contract-Version':'3'}});
+  if(url.endsWith('/delegations')){assert.equal(r.posts.length,0);submitted=true;return json(receipt);}
+  if(url.includes('/tasks/')){await tick();return json({...terminal,status:r.posts.length?'completed':'running'});}
+  throw Error(url);
+ });
+ const result=await c.delegateAndWait(chatId,body,{toolRunner:r.instance,pollIntervalMs:1,timeoutMs:500});await r.instance.drain();assert.ok(submitted);assert.equal(r.posts.length,1);assert.equal(result.task.output,'FINAL');
 });

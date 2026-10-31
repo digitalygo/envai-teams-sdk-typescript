@@ -605,6 +605,9 @@
             "$ref": "#/components/parameters/ContractVersion"
           },
           {
+            "$ref": "#/components/parameters/NativeTasksExtension"
+          },
+          {
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
@@ -695,7 +698,7 @@
       "get": {
         "operationId": "streamChatEvents",
         "summary": "Stream chat events",
-        "description": "Server-Sent Events stream with one `data:` line per event, JSON encoded. Attach with `after=<seq>` to receive retained events strictly after that sequence number. In the current implementation the replay window is bounded and in memory; eviction or restart discards events, resets sequence to 1 and exposes no epoch or cursor-expired signal. Within a resident runtime, positive sequence numbers are monotonic and continuous across turns. A wire-only `ping` with `seq: 0` is emitted periodically to keep proxies and load balancers from closing the idle stream. Each `data:` line is one Agent Team Protocol event envelope; `type` discriminates `data`, and the envelope and every per-type payload are defined in `events.json`.\n",
+        "description": "Server-Sent Events stream with one `data:` line per event, JSON encoded. Attach with `after=<seq>` to receive retained events strictly after that sequence number. In the current implementation the replay window is bounded and in memory; eviction or restart discards events, resets sequence to 1 and exposes no epoch or cursor-expired signal. Within a resident runtime, positive sequence numbers are monotonic and continuous across turns, including chat.extension placeholders for extension-only events. A wire-only `ping` with `seq: 0` is emitted periodically to keep proxies and load balancers from closing the idle stream. Each `data:` line is one Agent Team Protocol event envelope; `type` discriminates `data`, and the envelope and every per-type payload are defined in `events.json`.\n",
         "tags": [
           "Chat execution"
         ],
@@ -708,6 +711,9 @@
           },
           {
             "$ref": "#/components/parameters/ContractVersion"
+          },
+          {
+            "$ref": "#/components/parameters/NativeTasksExtension"
           }
         ],
         "responses": {
@@ -725,6 +731,13 @@
                 "schema": {
                   "type": "string",
                   "const": "3"
+                }
+              },
+              "X-Envai-Extensions": {
+                "description": "Present only when native-tasks-v1 was accepted",
+                "schema": {
+                  "type": "string",
+                  "const": "native-tasks-v1"
                 }
               },
               "Vary": {
@@ -1276,6 +1289,13 @@
                   "const": "3"
                 }
               },
+              "X-Envai-Extensions": {
+                "description": "Present only when native-tasks-v1 was accepted",
+                "schema": {
+                  "type": "string",
+                  "const": "native-tasks-v1"
+                }
+              },
               "Vary": {
                 "schema": {
                   "type": "string",
@@ -1297,6 +1317,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/ContractVersion"
+          },
+          {
+            "$ref": "#/components/parameters/NativeTasksExtension"
           }
         ]
       }
@@ -5259,6 +5282,16 @@
           "default": false
         }
       },
+      "NativeTasksExtension": {
+        "name": "X-Envai-Extensions",
+        "in": "header",
+        "required": false,
+        "description": "Opt in to native task events, capabilities and model diagnostics. Native clients send on all execution requests, including messages, capabilities and every SSE request including replay. On messages this selects detached background execution; without it background children retain the parent-bound lifecycle. Case-sensitive comma-separated tokens across repeated header values are trimmed. Unknown tokens are ignored. Every ATP request passing negotiation echoes the accepted extension; contract2 never enables it. Explicit native routes add no missing-opt-in error; Vary includes this header. Without opt-in task and delivery events project to ignorable chat.extension placeholders with empty data and null agent/turn and agent.done model diagnostics omitted, preserving original sequence IDs and the canonical log. Strict model admission is independent of this stream projection.",
+        "schema": {
+          "type": "string",
+          "example": "native-tasks-v1"
+        }
+      },
       "ContractVersion": {
         "name": "X-Envai-Contract-Version",
         "in": "header",
@@ -7216,13 +7249,14 @@
           },
           "families": {
             "type": "array",
-            "description": "Event families the server may emit",
+            "description": "Event families the negotiated surface may emit; task requires native-tasks-v1",
             "items": {
               "type": "string",
               "enum": [
                 "turn",
                 "agent",
-                "chat"
+                "chat",
+                "task"
               ]
             }
           },

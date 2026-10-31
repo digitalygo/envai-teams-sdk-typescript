@@ -173,6 +173,7 @@ export class HttpTransport {
           throw apiError(response.status, data, response.headers.get('x-request-id'));
         }
         if (negotiated && response.headers.get('X-Envai-Contract-Version') !== String(this.contractVersion)) { await response.body?.cancel(); throw new CompatibilityError('Missing or mismatched contract acknowledgment; mutation outcome may be unknown'); }
+        if (atp && this.nativeTasks && response.headers.get('X-Envai-Extensions') !== 'native-tasks-v1') { await response.body?.cancel(); throw new CompatibilityError('Missing or mismatched native extension acknowledgment; mutation outcome may be unknown'); }
         if (operation.mode === 'stream' || operation.mode === 'binary') return response as T;
         if (operation.mode === 'empty') return undefined as T;
         let data: unknown;

@@ -1,7 +1,8 @@
 {
   "contract_version": 3,
   "header": {
-    "X-Envai-Contract-Version": "3"
+    "X-Envai-Contract-Version": "3",
+    "X-Envai-Extensions": "native-tasks-v1"
   },
   "authentication": "Existing Envai bearer API key. Current alpha resources are user scoped; PR53 tenancy is not a dependency.",
   "base_path": "/api/v1/atp/v3",
@@ -161,5 +162,12 @@
     "agent.started.model": "Resolved root model selected for provider request.",
     "agent.done.requested_model": "Selected requested root model ID.",
     "agent.done.model": "Optional last nonempty provider-reported root model ID. May use canonical aliases or suffixes; omitted when provider did not report a model."
+  },
+  "extension_negotiation": {
+    "scope": "Native clients send this header on all execution-plane requests, including message writes, capabilities discovery and every SSE connection/reconnect/replay. Message writes select native detached lifecycle; absent header keeps legacy parent-bound background lifecycle. Explicit delegation endpoints select native semantics. Unknown extension tokens are ignored. Only ATP v3 supports this extension.",
+    "acknowledgment": "Every ATP request passing contract negotiation echoes X-Envai-Extensions: native-tasks-v1 when enabled; Vary includes X-Envai-Extensions. Current contract3 only. Tokens are case-sensitive, comma separated across repeated header values, with surrounding whitespace trimmed. Unknown tokens ignored. Contract2 never enables extension and remains historical-read-only. No missing-opt-in error on explicitly native routes.",
+    "without_extension": "Legacy families turn/agent/chat and features; task.* and chat.delivery.* project to ignorable chat.extension with empty data and null agent/turn; agent.done omits requested_model/model. Canonical log is unchanged.",
+    "sequences": "Original sequence IDs retained including placeholders, preserving continuity. Cursor is last received positive seq, including unknown events. Changing extension mode requires replay from an earlier cursor to retrieve previously projected data.",
+    "strict_model": "Write enforcement is independent of extension negotiation. Model diagnostics require opting in on SSE; otherwise diagnostics remain in the canonical log and can be replayed with opt-in."
   }
 }

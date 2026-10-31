@@ -117,15 +117,16 @@ export class EnvaiClient extends GeneratedClient {
   }
   /** Submit once, after target SSE is live; wait for the origin job, never the initial target turn. */
   async delegateAndWait(chatId: string, body: TeamDelegationRequest, options: BackgroundOptions = {}): Promise<DelegatedJobResult> {
-    return this.withTargetStream(body.target_chat_id, options, false, async signal => {
+    return this.withTargetStream(body.target_chat_id, options, async (signal, replay) => {
       const receipt = await this.delegateToTeam({ chat_id: chatId, body }, { signal, headers: options.headers });
       if (receipt.target_chat_id !== body.target_chat_id) throw new ProtocolError('Delegation receipt changed target chat');
+      await replay();
       return { receipt, task: await this.pollDelegatedJob(chatId, receipt, { ...options, signal }, body.origin_turn_id) };
     });
   }
   /** Resume a known receipt without submitting it again. Unknown resident tasks remain errors. */
   async waitForDelegatedJob(chatId: string, receipt: TeamDelegationReceipt, options: BackgroundOptions = {}): Promise<DetachedTaskSnapshot> {
-    return this.withTargetStream(receipt.target_chat_id, options, true, signal => this.pollDelegatedJob(chatId, receipt, { ...options, signal }));
+    return this.withTargetStream(receipt.target_chat_id, options, async (signal, replay) => { await replay(); return this.pollDelegatedJob(chatId, receipt, { ...options, signal }); });
   }
   private async pollDelegatedJob(chatId: string, receipt: TeamDelegationReceipt, options: BackgroundOptions, originTurnId?: string): Promise<DetachedTaskSnapshot> {
     for (;;) {
@@ -135,7 +136,7 @@ export class EnvaiClient extends GeneratedClient {
       await delay(positive(options.pollIntervalMs ?? 1_000, 'pollIntervalMs'), options.signal);
     }
   }
-  private async withTargetStream<T>(targetChatId: string, options: BackgroundOptions, replayTools: boolean, action: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  private async withTargetStream<T>(targetChatId: string, options: BackgroundOptions, action: (signal: AbortSignal, replay: () => Promise<void>) => Promise<T>): Promise<T> {
     if (!this.transport.nativeTasks) throw new CompatibilityError('Create the client with nativeTasks: true to opt in to native-tasks-v1');
     const capability = await this.transport.negotiate(options);
     for (const feature of ['cross_team_delegation', 'delegated_job_lifecycle', 'detached_background']) {
@@ -148,6 +149,9 @@ export class EnvaiClient extends GeneratedClient {
     const stream = this.events(targetChatId, { ...options, signal });
     let ready!: () => void;
     const readiness = new Promise<void>(resolve => { ready = resolve; });
+    let activate!: () => void, replayed!: () => void;
+    const activation = new Promise<void>(resolve => { activate = resolve; });
+    const replayDone = new Promise<void>(resolve => { replayed = resolve; });
     const pump = (async () => {
       let live = false;
       const pending: ATPEvent[] = [];
@@ -155,7 +159,7 @@ export class EnvaiClient extends GeneratedClient {
       for await (const event of stream) {
         if (!live) {
           if (!isEvent(event, 'ping')) {
-            if (replayTools) {
+            {
               bytes += Buffer.byteLength(JSON.stringify(event));
               if (bytes > 16 * 1024 * 1024) throw new ProtocolError('Target replay exceeds 16 MiB; resume with a cursor');
               pending.push(event);
@@ -163,8 +167,11 @@ export class EnvaiClient extends GeneratedClient {
             continue;
           }
           live = true; clearTimeout(readyTimer);
-          await acceptReplay(pending, options.toolRunner);
           ready();
+          await activation;
+          signal.throwIfAborted();
+          await acceptReplay(pending, options.toolRunner);
+          replayed();
         }
         await options.toolRunner?.accept(event);
       }
@@ -173,10 +180,10 @@ export class EnvaiClient extends GeneratedClient {
     // A failed stream is a failed wait, including while the non-retryable POST is in flight.
     try {
       await Promise.race([readiness, pump]);
-      return await Promise.race([action(signal), pump]);
+      return await Promise.race([action(signal, () => { activate(); return Promise.race([replayDone, pump]); }), pump]);
     } finally {
       clearTimeout(timer); clearTimeout(readyTimer);
-      controller.abort(); stream.close();
+      controller.abort(); activate(); stream.close();
       await pump.catch(() => {});
     }
   }
