@@ -49,7 +49,7 @@ function assertLegacyUsageCosts(value: unknown): void {
 
 export function validateContractValue<T>(name: string, value: unknown, version: ContractVersion = 3): T {
   if (version !== 2 && version !== 3) throw new CompatibilityError('Unsupported selected contract version');
-  const root = ['Completion', 'CompletionCollection', 'ChatAttachment', 'ChatAttachmentCollection', 'AttachmentManifest', 'ChatMessageAccepted'].includes(name) ? `urn:envai:http:v${version}#/components/schemas/` : 'urn:envai:wiki#/$defs/';
+  const root = ['Completion', 'CompletionCollection', 'ChatAttachment', 'ChatAttachmentCollection', 'AttachmentManifest', 'ChatMessageAccepted', 'NativeDeliveryReceipt', 'TeamDelegationReceipt', 'DetachedTaskSnapshot', 'PhaseClassificationResult', 'NativeDeliveryRequest', 'TeamDelegationRequest', 'PhaseClassificationRequest'].includes(name) ? `urn:envai:http:v${version}#/components/schemas/` : 'urn:envai:wiki#/$defs/';
   const ref = root + name;
   let validate = validators.get(ref);
   if (!validate) { validate = ajv.compile({ $ref: ref }); validators.set(ref, validate); }
@@ -64,6 +64,7 @@ export function validateContractValue<T>(name: string, value: unknown, version: 
 }
 const responseSchemas: Record<string, string> = {
   sendChatMessage: 'ChatMessageAccepted',
+  deliverWorkflowResult: 'NativeDeliveryReceipt', delegateToTeam: 'TeamDelegationReceipt', getDetachedTask: 'DetachedTaskSnapshot', classifyPhase: 'PhaseClassificationResult',
   uploadChatAttachment: 'ChatAttachment', getChatAttachment: 'ChatAttachment', retryChatAttachment: 'ChatAttachment', deleteChatAttachment: 'ChatAttachment',
   uploadWikiSource: 'WikiSource', getWikiSource: 'WikiSource', withdrawWikiSource: 'WikiSource',
   createWikiInboxRun: 'WikiOperation', createWikiOutboxRun: 'WikiOperation', createWikiSyncRun: 'WikiOperation', getWikiOperation: 'WikiOperation',
@@ -77,7 +78,115 @@ export function validateResponse(id: string, value: unknown, version: ContractVe
     const features = capability.features;
     if (features !== undefined && !Array.isArray(features)) value = { ...capability, features: Object.keys(features as Record<string, boolean>).filter(name => (features as Record<string, boolean>)[name]).map(name => name) };
   }
+  if (id === 'cancelDetachedTask') {
+    const result = value as { task_id?: unknown; status?: unknown; subtree?: unknown } | null;
+    if (!result || typeof result !== 'object' || Array.isArray(result) || typeof result.task_id !== 'string' || !result.task_id || result.status !== 'cancelled' || typeof result.subtree !== 'boolean' || Object.keys(result).some(key => !['task_id', 'status', 'subtree'].includes(key))) throw new ProtocolError('Invalid task cancellation receipt', value);
+  }
   if (id === 'listChatAttachments') validateContractValue('ChatAttachmentCollection', { data: value }, version);
   const name = responseSchemas[id];
   return name ? validateContractValue(name, value, version) : value;
+}
+
+export function validateBackgroundRequest(id: string, value: unknown): void {
+  const name = ({ deliverWorkflowResult: 'NativeDeliveryRequest', delegateToTeam: 'TeamDelegationRequest', classifyPhase: 'PhaseClassificationRequest' } as Record<string, string>)[id];
+  if (name) validateContractValue(name, value);
+  if (id === 'classifyPhase' && (value as { task_context: unknown }).task_context === null) throw new ProtocolError('task_context must be non-null JSON');
+  if (id === 'cancelDetachedTask' && (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(k => k !== 'subtree') || ('subtree' in value && typeof value.subtree !== 'boolean'))) throw new ProtocolError('Invalid task cancellation body');
+}
+
+// Optional complete HTTP boundary validation. References stay in the pinned
+// document, so schema composition, required fields and additive-field policy
+// are the canonical contract rather than a separately maintained model list.
+type SchemaObject = Record<string, unknown>;
+interface HttpSchemaOperation { root: SchemaObject; prefix: string; item: SchemaObject; operation: SchemaObject; pointer: string; itemPointer: string }
+const pointerToken = (value: string): string => value.replace(/~/g, '~0').replace(/\//g, '~1');
+function schemaObject(value: unknown): SchemaObject { return value && typeof value === 'object' && !Array.isArray(value) ? value as SchemaObject : {}; }
+function resolveSchema(root: SchemaObject, value: unknown, pointer: string): { value: SchemaObject; pointer: string } {
+  let object = schemaObject(value); const seen = new Set<string>();
+  while (typeof object.$ref === 'string') {
+    const ref = object.$ref;
+    if (!ref.startsWith('#/') || seen.has(ref)) throw new ProtocolError('Unsupported or cyclic HTTP schema reference');
+    seen.add(ref); pointer = ref;
+    object = schemaObject(ref.slice(2).split('/').reduce<unknown>((node, key) => schemaObject(node)[key.replace(/~1/g, '/').replace(/~0/g, '~')], root));
+  }
+  return { value: object, pointer };
+}
+const httpSchemaOperations = new Map<string, HttpSchemaOperation>();
+for (const [version, document] of [[3, current], [2, legacy]] as const) {
+  const root = document as SchemaObject;
+  for (const [path, rawItem] of Object.entries(schemaObject(root.paths))) {
+    const item = schemaObject(rawItem), itemPointer = `#/paths/${pointerToken(path)}`;
+    for (const [method, rawOperation] of Object.entries(item)) {
+      const operation = schemaObject(rawOperation);
+      if (typeof operation.operationId === 'string') httpSchemaOperations.set(`${version}:${operation.operationId}`, { root, prefix: `urn:envai:http:v${version}`, item, operation, pointer: `${itemPointer}/${method}`, itemPointer });
+    }
+  }
+}
+ajv.addFormat('binary', true);
+function httpOperation(id: string, version: ContractVersion): HttpSchemaOperation {
+  const operation = httpSchemaOperations.get(`${version}:${id === 'negotiateContract' ? 'getCapabilities' : version === 2 ? id.replace(/Legacy$/, '') : id}`);
+  if (!operation) throw new ProtocolError(`No canonical HTTP schema for ${id} in contract ${version}`);
+  return operation;
+}
+function assertHttpSchema(operation: HttpSchemaOperation, pointer: string, value: unknown, label: string): void {
+  const ref = operation.prefix + pointer; let validate = validators.get(ref);
+  if (!validate) { validate = ajv.compile({ $ref: ref }); validators.set(ref, validate); }
+  if (!validate(value)) throw new ProtocolError(`Invalid ${label}: ` + ajv.errorsText(validate.errors?.slice(0, 3)));
+}
+/** Project actual binary values only at declared binary slots, without changing request data. */
+function projectHttpBody(operation: HttpSchemaOperation, schema: unknown, value: unknown): unknown {
+  const resolved = resolveSchema(operation.root, schema, '').value;
+  if (resolved.format === 'binary') { if (!(value instanceof Blob)) throw new ProtocolError('HTTP binary request field must be a Blob'); return ''; }
+  if (Array.isArray(value) && resolved.items) return value.map(item => projectHttpBody(operation, resolved.items, item));
+  if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+    const properties = schemaObject(resolved.properties);
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, properties[key] ? projectHttpBody(operation, properties[key], item) : item]));
+  }
+  return value;
+}
+export function validateHttpRequest(id: string, params: Record<string, unknown>, version: ContractVersion): void {
+  const operation = httpOperation(id, version);
+  for (const [owner, pointer] of [[operation.item, operation.itemPointer], [operation.operation, operation.pointer]] as const) {
+    const parameters = owner.parameters;
+    if (!Array.isArray(parameters)) continue;
+    parameters.forEach((raw, index) => {
+      const parameter = resolveSchema(operation.root, raw, `${pointer}/parameters/${index}`);
+      if (!['path', 'query'].includes(String(parameter.value.in))) return;
+      const value = params[String(parameter.value.name)];
+      if (value === undefined) { if (parameter.value.required) throw new ProtocolError(`Missing HTTP ${String(parameter.value.name)}`); return; }
+      if (parameter.value.schema !== undefined) assertHttpSchema(operation, `${parameter.pointer}/schema`, value, `${id} ${String(parameter.value.name)}`);
+    });
+  }
+  if (operation.operation.requestBody !== undefined) {
+    const body = resolveSchema(operation.root, operation.operation.requestBody, `${operation.pointer}/requestBody`);
+    if (params.body === undefined) { if (body.value.required) throw new ProtocolError(`Missing ${id} request body`); return; }
+    const [mime, entry] = Object.entries(schemaObject(body.value.content))[0] ?? [];
+    const schema = schemaObject(entry).schema;
+    if (mime && schema !== undefined) {
+      let projected: unknown;
+      try { projected = JSON.parse(JSON.stringify(projectHttpBody(operation, schema, params.body), (_key, value: unknown) => { if(typeof value === 'number' && !Number.isFinite(value)) throw new ProtocolError('HTTP request numbers must be finite'); return value; })); }
+      catch(error) { if(error instanceof ProtocolError) throw error; throw new ProtocolError('HTTP request body is not serializable JSON'); }
+      assertHttpSchema(operation, `${body.pointer}/content/${pointerToken(mime)}/schema`, projected, `${id} request body`);
+    }
+  }
+}
+export function validateHttpResponse(id: string, status: number, value: unknown, version: ContractVersion): void {
+  const operation = httpOperation(id, version), responses = schemaObject(operation.operation.responses);
+  const code = Object.hasOwn(responses, String(status)) ? String(status) : Object.hasOwn(responses, '2XX') ? '2XX' : undefined;
+  if (!code) throw new ProtocolError(`Undeclared success status for ${id}`);
+  const response = resolveSchema(operation.root, responses[code], `${operation.pointer}/responses/${code}`);
+  const schema = schemaObject(schemaObject(response.value.content)['application/json']).schema;
+  if (schema !== undefined && ['getCapabilities','getCapabilitiesLegacy','negotiateContract'].includes(id)) {
+    const key = `${operation.prefix}:capability-discovery:${id}`; let validate = validators.get(key);
+    if(!validate) {
+      // Discovery is explicitly forward compatible, including legacy feature maps.
+      // Preserve canonical bytes and every other schema/acknowledgment constraint.
+      const discovery = structuredClone(resolveSchema(operation.root,schema,'').value);
+      const properties = schemaObject(discovery.properties);
+      for(const field of ['families','features']) delete schemaObject(schemaObject(properties[field]).items).enum;
+      if(properties.features) properties.features = {anyOf:[properties.features,{type:'object',additionalProperties:{type:'boolean'}}]};
+      validate = ajv.compile({...discovery,components:operation.root.components}); validators.set(key,validate);
+    }
+    if(!validate(value)) throw new ProtocolError(`Invalid ${id} response: ` + ajv.errorsText(validate.errors?.slice(0,3)));
+  } else if (schema !== undefined) assertHttpSchema(operation, `${response.pointer}/content/application~1json/schema`, value, `${id} response`);
 }

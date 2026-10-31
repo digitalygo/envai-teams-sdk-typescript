@@ -60,3 +60,26 @@ test('Postgres adapter rejects duplicate rows before any mutation if a restored 
  for(const action of [()=>store.get(key),()=>store.claim(key,good),()=>store.transition(key,['claimed'],{state:'resolved'})])await assert.rejects(action,error=>error.code==='invalid_tool_state');
  assert.equal(writes,0);assert.deepEqual(copies,[good,good]);
 });
+
+test('supported PostgreSQL tool store: concurrent claims, restart task barriers, corruption and scope isolation', {skip:!process.env.ENVAI_TEST_PG_URL}, async()=>{
+ const {default:pg}=await import('pg');const {randomUUID}=await import('node:crypto');
+ const {PostgresToolStateStore,ClientToolRunner,ClientToolRegistry,ToolRequestVerifier}=await import('../dist/index.js');
+ const fixture=JSON.parse(readFileSync(new URL('../testdata/parity/fixtures.json',import.meta.url),'utf8'));
+ const schema='envai_tools_'+randomUUID().replaceAll('-','');const admin=new pg.Pool({connectionString:process.env.ENVAI_TEST_PG_URL});
+ await admin.query('CREATE SCHEMA '+schema);const pool=new pg.Pool({connectionString:process.env.ENVAI_TEST_PG_URL,options:'-c search_path='+schema,max:8});
+ try {
+  await pool.query('CREATE TABLE envai_tool_state (key text PRIMARY KEY, record jsonb NOT NULL)');
+  const stores=Array.from({length:8},()=>new PostgresToolStateStore(pool));
+  assert.equal((await Promise.all(stores.map(s=>s.claim(key,good)))).filter(Boolean).length,1);
+  assert.deepEqual(await new PostgresToolStateStore(pool).get(key),good);
+  const second=JSON.stringify(['other-scope',good.chatId,good.callId]);assert.equal(await stores[0].claim(second,good),true);
+  assert.equal(await stores[0].transition(key,['claimed'],{state:'completed',output:'saved',isError:false}),true);
+  const transitions=await Promise.all(stores.map(s=>s.transition(key,['completed'],{state:'submitted'})));assert.equal(transitions.filter(Boolean).length,1);
+  let effects=0;const registry=new ClientToolRegistry().register({name:fixture.request.data.tool_name,parameters:{type:'object'},handler:()=>{effects++;return 'must not execute';}});
+  const options={scope:'persistent-task',registry,verifier:new ToolRequestVerifier({get:async()=>fixture.jwks}),submit:async()=>{throw Error('must not submit');}};
+  const first=new ClientToolRunner({...options,store:stores[0]});await first.accept(fixture.task_cancelled);first.close();
+  const restarted=new ClientToolRunner({...options,store:new PostgresToolStateStore(pool)});await restarted.accept(fixture.task_request);await restarted.drain();restarted.close();assert.equal(effects,0);
+  await pool.query('UPDATE envai_tool_state SET record=$2::jsonb WHERE key=$1',[key,'null']);
+  await assert.rejects(stores[0].claim(key,good),e=>e.code==='invalid_tool_state');assert.equal((await pool.query('SELECT record FROM envai_tool_state WHERE key=$1',[key])).rows[0].record,null);
+ } finally {await pool.end();await admin.query('DROP SCHEMA '+schema+' CASCADE');await admin.end();}
+});

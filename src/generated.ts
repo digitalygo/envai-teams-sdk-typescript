@@ -2,6 +2,13 @@
 import { HttpTransport, type RequestOptions } from "./http.js";
 import { operations } from "./operations.js";
 import type { AtpUsage } from "./event-types.js";
+export type NativeDeliveryRequest = { "workspace_id": string; "event_id": string; "origin_turn_id": string; "task_id": string; "output": string; "status": "completed" | "blocked" | "failed" | "cancelled" };
+export type NativeDeliveryReceipt = { "event_id": string; "status": "queued" | "delivered" | "cancelled" | "failed"; "turn_id"?: string; "error"?: string; "duplicate": boolean };
+export type TeamDelegationRequest = { "workspace_id": string; "event_id": string; "origin_turn_id": string; "target_chat_id": string; "prompt": string; "notify_origin"?: boolean; "strict_model"?: boolean };
+export type TeamDelegationReceipt = { "task_id": string; "target_chat_id": string; "turn_id": string };
+export type DetachedTaskSnapshot = { "task_id": string; "origin_turn_id": string; "parent_task_id"?: string; "target_chat_id"?: string; "result_turn_id"?: string; "output"?: string; "error"?: string; "delivery_error"?: string; "status": "running" | "completed" | "failed" | "cancelled"; [key: string]: unknown };
+export type PhaseClassificationRequest = { "request_id": string; "phase_id": string; "final_output": string; "task_context": unknown; "attempt": number };
+export type PhaseClassificationResult = { "model": string; "request_id": string; "invocation_id": string; "decision": "BLOCKED" | "NOT BLOCKED" };
 export type CompletionTerminalSnapshotUsage = { "input_tokens"?: number; "output_tokens"?: number; "duration_ms"?: number; "sprite_ms"?: number; "sprite_ram_gb_ms"?: number; "tool_calls"?: number; "cost_usd"?: number | null; "billing"?: BillingState; "usage_cost"?: UsageCost };
 export type CompletionTerminalSnapshot = { "event_id": string; "occurred_at": string; "event_type": "turn.completed" | "turn.failed" | "turn.cancelled"; "data": { "turn_id": string; "usage"?: CompletionTerminalSnapshotUsage; "cost"?: number | null; "finish_reason"?: string; "reason"?: string; "code"?: string; "message"?: string; "chat_usage"?: CompletionTerminalSnapshotChatUsage; "chat_cost"?: number | null }; "v"?: 2 | 3; "accepted_protocol_version"?: 2 | 3 };
 export type CompletionTerminalSnapshotChatUsage = { "input_tokens": number; "output_tokens": number; "cost_usd": number | null; "duration_ms": number; "sprite_ms"?: number; "sprite_ram_gb_ms"?: number; "tool_calls"?: number; "billing"?: BillingState; "usage_cost"?: UsageCost };
@@ -14,7 +21,8 @@ export type WikiSource = { "file_id": string; "workspace_id": string; "original_
 export type BatchSizes = { "inbox": number; "outbox": number; [key: string]: unknown };
 export type FileOutcome = { "file_id": string; "status": "pending" | "running" | "succeeded" | "withdrawn" | "failed" | "deferred"; "error_code": (string | null); [key: string]: unknown };
 export type PhaseResult = { "status": "pending" | "running" | "completed" | "failed" | "skipped_empty"; "selected": number; "succeeded": number; "withdrawn": number; "failed": number; "files": Array<FileOutcome>; [key: string]: unknown };
-export type WikiOperation = { "operation_id": string; "workspace_id": string; "kind": "inbox" | "outbox" | "sync"; "status": "queued" | "running" | "completed" | "failed"; "phase": (string | null); "phases": { "inbox"?: PhaseResult; "outbox"?: PhaseResult }; "started_at": (string | null); "finished_at": (string | null); "batch_sizes": BatchSizes; "billing": BillingState; "usage_cost": UsageCost; [key: string]: unknown };
+export type WikiOperation = { "operation_id": string; "workspace_id": string; "kind": "inbox" | "outbox" | "sync"; "status": "queued" | "running" | "completed" | "failed"; "phase": (string | null); "phases": { "inbox"?: PhaseResult; "outbox"?: PhaseResult }; "started_at": (string | null); "finished_at": (string | null); "batch_sizes": BatchSizes; "billing": BillingState; "usage_cost": UsageCost; "reported_problems"?: Array<ReportedProblem>; [key: string]: unknown };
+export type ReportedProblem = { "file_id": string; "message": string };
 export type Category = { "category_id": string; "name": string; "description": string; [key: string]: unknown };
 export type Categories = { "categories": Array<Category>; "catalog_revision": number; [key: string]: unknown };
 export type CatalogEntry = { "entry_id": string; "type": "raw" | "artifact"; "target_id": string; "canonical_path": string; "description": string; "inserted_at": string; [key: string]: unknown };
@@ -31,7 +39,7 @@ export type ChatAttachment = { "attachment_id": string; "workspace_id": string; 
 export type ChatAttachmentResource = { "data": ChatAttachment; [key: string]: unknown };
 export type ChatAttachmentCollection = { "data": { "attachments": Array<ChatAttachment>; [key: string]: unknown }; [key: string]: unknown };
 export type ChatAttachmentUploadRequest = { "file": Blob };
-export type ChatMessageRequest = { "message": string; "attachment_ids"?: Array<string>; [key: string]: unknown };
+export type ChatMessageRequest = { "message": string; "attachment_ids"?: Array<string>; "strict_model"?: boolean; [key: string]: unknown };
 export type ChatMessageAccepted = { "status": "accepted"; "turn_id": string; "attachment_ids"?: Array<string>; [key: string]: unknown };
 export type TurnAccepted = { "turn_id": string; [key: string]: unknown };
 export type ToolOutputRequest = { "call_id": string; "output": string; "is_error"?: boolean; [key: string]: unknown };
@@ -42,18 +50,18 @@ export type ChatForked = { "source_chat_id": string; "destination_chat_id": stri
 export type OrchestratorContextItem = { "kind": "compacted" | "assistant"; "turn_id"?: string | null; "content": string; [key: string]: unknown };
 export type RestoreChatRequest = { "orchestrator_context": Array<OrchestratorContextItem>; [key: string]: unknown };
 export type RestoreChatAccepted = { "status": "restored"; "turn_id": string | null; [key: string]: unknown };
-export type Capabilities = { "protocol_version": 3; "families": Array<"turn" | "agent" | "chat">; "event_types": Array<string>; "tool_kinds": Array<"server" | "client" | "knowledge" | "code">; "features": Array<string>; "contract_version": 3; "supported_contract_versions": Array<2 | 3>; "legacy_v2_mode": "historical_reads_replay_only"; [key: string]: unknown };
+export type Capabilities = { "protocol_version": 3; "families": Array<"turn" | "agent" | "chat" | "task">; "event_types": Array<string>; "tool_kinds": Array<"server" | "client" | "knowledge" | "code">; "features": Array<string>; "contract_version": 3; "supported_contract_versions": Array<2 | 3>; "legacy_v2_mode": "historical_reads_replay_only"; [key: string]: unknown };
 export type Workspace = { "id": string; "user_id": string; "name": string; "metadata": WorkspaceMetadata; "created_at": string; "updated_at": string; [key: string]: unknown };
 export type WorkspaceResource = { "data": Workspace; [key: string]: unknown };
 export type WorkspaceCollection = { "data": Array<Workspace>; [key: string]: unknown };
 export type WorkspaceMetadata = ({ [key: string]: unknown } | Array<unknown>);
 export type WorkspaceCreateRequest = { "name": string; "metadata"?: WorkspaceMetadata; [key: string]: unknown };
-export type WorkspaceUpdateRequest = (unknown | unknown);
+export type WorkspaceUpdateRequest = ({ "name"?: string; "metadata"?: WorkspaceMetadata; [key: string]: unknown } & ({ "name": string } | { "metadata": WorkspaceMetadata }));
 export type UserTool = { "id": string; "name": string; "kind": "client"; "description": string | null; "parameters": { [key: string]: unknown }; "timeout_seconds": number; "created_at": string; "updated_at": string };
 export type UserToolResource = { "data": UserTool; [key: string]: unknown };
 export type UserToolCollection = { "data": Array<UserTool>; [key: string]: unknown };
 export type UserToolCreateRequest = { "name": string; "kind"?: "client"; "description"?: string | null; "parameters": { "type": "object"; [key: string]: unknown }; "timeout_seconds"?: number };
-export type UserToolUpdateRequest = (unknown | unknown | unknown);
+export type UserToolUpdateRequest = ({ "description"?: string | null; "parameters"?: { "type": "object"; [key: string]: unknown }; "timeout_seconds"?: number } & ({ "description": string | null } | { "parameters": { "type": "object"; [key: string]: unknown } } | { "timeout_seconds": number }));
 export type Chat = { "id": string; "workspace_id": string; "user_id": string; "team_id": string; "title": string | null; "created_at": string; "updated_at": string; [key: string]: unknown };
 export type ChatResource = { "data": Chat; [key: string]: unknown };
 export type ChatCollection = { "data": Array<Chat>; [key: string]: unknown };
@@ -65,13 +73,13 @@ export type Agent = { "id": string; "user_id": string; "name": string; "descript
 export type AgentResource = { "data": Agent; [key: string]: unknown };
 export type AgentCollection = { "data": Array<Agent>; [key: string]: unknown };
 export type AgentCreateRequest = { "name": string; "description"?: string | null; "system_prompt": string; "model"?: string | null; "mode": "primary" | "subagent"; "tools_enabled"?: Array<AgentTool>; "external_tools_enabled"?: Array<AgentTool>; "permissions"?: { [key: string]: unknown }; "can_write_knowledge"?: boolean; "can_write_skills"?: boolean; "config"?: { [key: string]: unknown }; [key: string]: unknown };
-export type AgentUpdateRequest = (unknown | unknown | unknown | unknown | unknown | unknown | unknown | unknown | unknown | unknown | unknown);
+export type AgentUpdateRequest = ({ "name"?: string; "description"?: string | null; "system_prompt"?: string; "model"?: string | null; "mode"?: "primary" | "subagent"; "tools_enabled"?: Array<AgentTool>; "external_tools_enabled"?: Array<AgentTool>; "permissions"?: { [key: string]: unknown }; "can_write_knowledge"?: boolean; "can_write_skills"?: boolean; "config"?: { [key: string]: unknown }; [key: string]: unknown } & ({ "name": string } | { "description": string | null } | { "system_prompt": string } | { "model": string | null } | { "mode": "primary" | "subagent" } | { "tools_enabled": Array<AgentTool> } | { "external_tools_enabled": Array<AgentTool> } | { "permissions": { [key: string]: unknown } } | { "can_write_knowledge": boolean } | { "can_write_skills": boolean } | { "config": { [key: string]: unknown } }));
 export type AgentTool = { "name": string; [key: string]: unknown };
 export type Team = { "id": string; "user_id": string; "name": string; "description": string | null; "orchestrator_id": string; "members": Array<TeamMember>; "created_at": string; "updated_at": string; [key: string]: unknown };
 export type TeamResource = { "data": Team; [key: string]: unknown };
 export type TeamCollection = { "data": Array<Team>; [key: string]: unknown };
 export type TeamCreateRequest = { "name": string; "description"?: string | null; "orchestrator_id": string; "members"?: Array<TeamMemberCreateRequest>; [key: string]: unknown };
-export type TeamUpdateRequest = (unknown | unknown | unknown | unknown);
+export type TeamUpdateRequest = ({ "name"?: string; "description"?: string | null; "orchestrator_id"?: string; "members"?: Array<TeamMemberCreateRequest>; [key: string]: unknown } & ({ "name": string } | { "description": string | null } | { "orchestrator_id": string } | { "members": Array<TeamMemberCreateRequest> }));
 export type TeamMember = { "agent_definition_id": string; "name": string; "position": number; "role": string | null; [key: string]: unknown };
 export type TeamMemberCreateRequest = { "agent_definition_id": string; "role"?: string | null; [key: string]: unknown };
 export type ApiKey = { "id": string; "name": string; "scopes": Array<"completions:write">; "expires_at": string | null; "revoked_at": string | null; "created_at": string; [key: string]: unknown };
@@ -117,6 +125,16 @@ export type WorkspaceFileRequest = { "path": string; "content": string; [key: st
 export type ConvertToPdfRequest = { "path": string; [key: string]: unknown };
 export type ThrottleError = { "error": { "type": "too_many_requests"; "message": string }; [key: string]: unknown };
 export type CapabilitiesLegacy = { "protocol_version": 2; "families": Array<"turn" | "agent" | "chat">; "event_types": Array<string>; "tool_kinds": Array<"server" | "client" | "knowledge" | "code">; "features": Array<"replay" | "fork" | "restore" | "ping" | "background_delegation" | "client_tools" | "chat_title">; [key: string]: unknown };
+export type DeliverWorkflowResultParams = { "chat_id": string; body: NativeDeliveryRequest };
+export type DeliverWorkflowResultResult = NativeDeliveryReceipt;
+export type DelegateToTeamParams = { "chat_id": string; body: TeamDelegationRequest };
+export type DelegateToTeamResult = TeamDelegationReceipt;
+export type GetDetachedTaskParams = { "chat_id": string; "task_id": string };
+export type GetDetachedTaskResult = DetachedTaskSnapshot;
+export type CancelDetachedTaskParams = { "chat_id": string; "task_id": string; body: { "subtree"?: boolean } };
+export type CancelDetachedTaskResult = { "task_id": string; "status": "cancelled"; "subtree": boolean };
+export type ClassifyPhaseParams = { "chat_id": string; body: PhaseClassificationRequest };
+export type ClassifyPhaseResult = PhaseClassificationResult;
 export type SendChatMessageParams = { "chat_id": string; "idempotencyKey"?: string; body: ChatMessageRequest };
 export type SendChatMessageResult = ChatMessageAccepted;
 export type StreamChatEventsParams = { "chat_id": string; "after"?: number };
@@ -163,7 +181,7 @@ export type ListChatsParams = { "workspace_id": string };
 export type ListChatsResult = Array<Chat>;
 export type GetChatParams = { "workspace_id": string; "chat_id": string };
 export type GetChatResult = Chat;
-export type ListCompletionsParams = { "workspace_id": string; "chat_id": string; "status"?: "running" | "succeeded" | "failed" | "canceled"; "model_orchestrator"?: string; "started_at[from]"?: string; "started_at[to]"?: string; "per_page"?: number };
+export type ListCompletionsParams = { "workspace_id": string; "chat_id": string; "status"?: "running" | "succeeded" | "failed" | "canceled"; "model_orchestrator"?: string; "started_at[from]"?: string; "started_at[to]"?: string; "page"?: number; "per_page"?: number };
 export type ListCompletionsResult = CompletionCollection;
 export type GetCompletionParams = { "workspace_id": string; "chat_id": string; "completion_id": string };
 export type GetCompletionResult = Completion;
@@ -261,6 +279,16 @@ export type GetCapabilitiesLegacyParams = Record<string, never>;
 export type GetCapabilitiesLegacyResult = CapabilitiesLegacy;
 export class GeneratedClient {
  constructor(protected readonly transport: HttpTransport) {}
+ /** Deliver an external workflow result */
+ deliverWorkflowResult(params: DeliverWorkflowResultParams, options: RequestOptions = {}): Promise<DeliverWorkflowResultResult> { return this.transport.request(operations.deliverWorkflowResult, params, options); }
+ /** Delegate to another team chat */
+ delegateToTeam(params: DelegateToTeamParams, options: RequestOptions = {}): Promise<DelegateToTeamResult> { return this.transport.request(operations.delegateToTeam, params, options); }
+ /** Read a detached task */
+ getDetachedTask(params: GetDetachedTaskParams, options: RequestOptions = {}): Promise<GetDetachedTaskResult> { return this.transport.request(operations.getDetachedTask, params, options); }
+ /** Cancel a detached task */
+ cancelDetachedTask(params: CancelDetachedTaskParams, options: RequestOptions = {}): Promise<CancelDetachedTaskResult> { return this.transport.request(operations.cancelDetachedTask, params, options); }
+ /** Classify whether a workflow phase is blocked */
+ classifyPhase(params: ClassifyPhaseParams, options: RequestOptions = {}): Promise<ClassifyPhaseResult> { return this.transport.request(operations.classifyPhase, params, options); }
  /** Send a message and start a turn */
  sendChatMessage(params: SendChatMessageParams, options: RequestOptions = {}): Promise<SendChatMessageResult> { return this.transport.request(operations.sendChatMessage, params, options); }
  /** Stream chat events */
@@ -406,7 +434,7 @@ export class GeneratedClient {
  readonly attachments = { upload: this.uploadChatAttachment.bind(this), list: this.listChatAttachments.bind(this), get: this.getChatAttachment.bind(this), retry: this.retryChatAttachment.bind(this), delete: this.deleteChatAttachment.bind(this), download: this.downloadChatAttachment.bind(this) };
  readonly workspaces = { create: this.createWorkspace.bind(this), list: this.listWorkspaces.bind(this), get: this.getWorkspace.bind(this), update: this.updateWorkspace.bind(this) };
  readonly tools = { create: this.createUserTool.bind(this), list: this.listUserTools.bind(this), get: this.getUserTool.bind(this), update: this.updateUserTool.bind(this), delete: this.deleteUserTool.bind(this) };
- readonly chats = { create: this.createChat.bind(this), list: this.listChats.bind(this), get: this.getChat.bind(this), sendMessage: this.sendChatMessage.bind(this), eventsResponse: this.streamChatEvents.bind(this), cancel: this.cancelChatTurn.bind(this), steer: this.steerChatTurn.bind(this), submitToolOutput: this.resolveChatTool.bind(this), submitApproval: this.resolveChatApproval.bind(this), fork: this.forkChat.bind(this), restore: this.restoreChat.bind(this) };
+ readonly chats = { create: this.createChat.bind(this), list: this.listChats.bind(this), get: this.getChat.bind(this), sendMessage: this.sendChatMessage.bind(this), eventsResponse: this.streamChatEvents.bind(this), cancel: this.cancelChatTurn.bind(this), steer: this.steerChatTurn.bind(this), submitToolOutput: this.resolveChatTool.bind(this), submitApproval: this.resolveChatApproval.bind(this), deliver: this.deliverWorkflowResult.bind(this), delegate: this.delegateToTeam.bind(this), task: this.getDetachedTask.bind(this), cancelTask: this.cancelDetachedTask.bind(this), classifyPhase: this.classifyPhase.bind(this), fork: this.forkChat.bind(this), restore: this.restoreChat.bind(this) };
  readonly completions = { list: this.listCompletions.bind(this), get: this.getCompletion.bind(this) };
  readonly workspaceFiles = { get: this.indexWorkspaceFiles.bind(this), create: this.createWorkspaceFile.bind(this), update: this.updateWorkspaceFile.bind(this), delete: this.deleteWorkspaceFile.bind(this), download: this.downloadWorkspaceFile.bind(this), convertToPdf: this.convertWorkspaceFileToPdf.bind(this), uploadSource: this.uploadWikiSource.bind(this), sourceStatus: this.getWikiSource.bind(this), downloadSource: this.downloadWikiSource.bind(this) };
  readonly agents = { create: this.createAgent.bind(this), list: this.listAgents.bind(this), get: this.getAgent.bind(this), update: this.updateAgent.bind(this), delete: this.deleteAgent.bind(this) };

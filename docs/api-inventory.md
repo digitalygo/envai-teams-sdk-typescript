@@ -1,9 +1,14 @@
 # HTTP operation inventory
 
-Generated contract snapshot: API 3.0.0, 71 operations. Paths are relative to /api/v1 except the two origin-level public JWKS routes. ATP v3, completion and authenticated source/wiki routes require negotiation. Explicit legacy methods require read-only contract 2.
+Generated contract snapshot: API 3.0.0, 76 operations. Paths are relative to /api/v1 except the two origin-level public JWKS routes. ATP v3, completion and authenticated source/wiki routes require negotiation. Explicit legacy methods require read-only contract 2.
 
 | Operation ID / client method | HTTP | Path | Bearer |
 | --- | --- | --- | --- |
+| deliverWorkflowResult | POST | `/atp/v3/chats/{chat_id}/deliveries` | Yes |
+| delegateToTeam | POST | `/atp/v3/chats/{chat_id}/delegations` | Yes |
+| getDetachedTask | GET | `/atp/v3/chats/{chat_id}/tasks/{task_id}` | Yes |
+| cancelDetachedTask | POST | `/atp/v3/chats/{chat_id}/tasks/{task_id}/cancel` | Yes |
+| classifyPhase | POST | `/atp/v3/chats/{chat_id}/classify-phase` | Yes |
 | sendChatMessage | POST | `/atp/v3/chats/{chat_id}/messages` | Yes |
 | streamChatEvents | GET | `/atp/v3/chats/{chat_id}/events` | Yes |
 | cancelChatTurn | POST | `/atp/v3/chats/{chat_id}/cancel` | Yes |

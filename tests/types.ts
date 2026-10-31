@@ -33,3 +33,25 @@ function webhookState(event: WikiWebhookEvent) {
   const total: UsageCost['totals'] = event.usage_cost.totals; return total;
 }
 void invalidLegacy; void nullable; void rounded; void legacyCost; void sourceState; void webhookState;
+
+import type { WorkspaceUpdateRequest, UserToolUpdateRequest, AgentUpdateRequest, TeamUpdateRequest, CompletionPageParams } from '../src/index.js';
+const workspaceUpdate: WorkspaceUpdateRequest = { name: 'updated' };
+const toolUpdate: UserToolUpdateRequest = { description: null };
+const agentUpdate: AgentUpdateRequest = { model: null, can_write_skills: true };
+const teamUpdate: TeamUpdateRequest = { members: [] };
+// @ts-expect-error Updates require at least one declared field.
+const emptyWorkspaceUpdate: WorkspaceUpdateRequest = {};
+// @ts-expect-error The optional field still has its declared type.
+const invalidWorkspaceUpdate: WorkspaceUpdateRequest = { name: false };
+// @ts-expect-error Tool updates cannot set name.
+const invalidToolUpdate: UserToolUpdateRequest = { name: 'rename' };
+// @ts-expect-error Agent model is string or null, not a number.
+const invalidAgentUpdate: AgentUpdateRequest = { model: 123 };
+// @ts-expect-error Agent updates require an updatable property.
+const emptyAgentUpdate: AgentUpdateRequest = {};
+// @ts-expect-error Team member replacement is an array.
+const invalidTeamUpdate: TeamUpdateRequest = { members: 'all' };
+// @ts-expect-error Team updates require an updatable property.
+const emptyTeamUpdate: TeamUpdateRequest = {};
+const completionPage: CompletionPageParams = {workspace_id:'w',chat_id:'c',page:2};
+void workspaceUpdate; void toolUpdate; void agentUpdate; void teamUpdate; void emptyWorkspaceUpdate; void invalidWorkspaceUpdate; void invalidToolUpdate; void invalidAgentUpdate; void emptyAgentUpdate; void invalidTeamUpdate; void emptyTeamUpdate; void completionPage;

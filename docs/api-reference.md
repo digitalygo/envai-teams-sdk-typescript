@@ -37,3 +37,19 @@ Only GETs retry automatically: transient transport failures and 429/502/503/504,
 Exact request/response declarations are in [generated.ts](../src/generated.ts), and the bundled [OpenAPI contract](../contracts/openapi.yaml) defines required fields, constraints, and enums. Use server-returned identifiers as opaque strings. `undefined` fields are omitted by JSON serialization; send null only when the field permits it. Unknown REST properties remain JavaScript data; Wiki/source and completion metadata are schema-validated before return, including finite costs and safe integer revisions; other legacy REST annotations are not complete runtime validation. ATP events validate against the exact selected v2/v3 schema. `LegacyAtpUsage` retains numeric v2 costs; `AtpUsage` exposes nullable v3 costs.
 
 `CompatibilityError` reports unsupported contract selection, old-server/version acknowledgment failures and required upgrades. Default v3 requests never silently downgrade. Explicit `getCapabilitiesLegacy` and `streamChatEventsLegacy` require `contractVersion: 2`, which refuses mutations. `uploadSourceFile`, `waitForSource`, `waitForWikiOperation`, `WikiWebhookVerifier` and `PostgresWikiWebhookInbox` are described in [Wiki integration](WIKI.md).
+
+## Native background work
+
+Opt in with `nativeTasks:true`. Native typed models include `NativeDeliveryRequest/Receipt`, `TeamDelegationRequest/Receipt`, `DetachedTaskSnapshot` and `PhaseClassificationRequest/Result`. Use `delegateAndWait` or `waitForDelegatedJob` for full origin-task outcomes, and `taskEvents` for a subscription that survives origin turn completion. See [background workflows](BACKGROUND.md) for negotiated capabilities, signature verification, deduplication and cancellation ownership.
+
+### Completion pages
+
+`client.completions.page({ workspace_id, chat_id, page: 2 })` validates a positive safe integer page. `client.completions.iterate(params, { maxPages: 1000, signal })` yields completions across numeric pages using the normal authenticated GET transport, including retries, contract acknowledgment, errors, timeout and cancellation. It preserves the original filters and API base path. Absolute or relative response links must identify the next page on the same origin and collection path; malformed, cross-origin, credential-bearing and inconsistent links fail closed before a second request. Collection pagination is not a snapshot when records change between pages.
+
+Diagnostic image requests accept `files: Blob[]` (one to four files, at most 10240 KiB each). Use `File` to preserve names; multipart sends actual repeated `files[]` parts, not JSON placeholders.
+
+### Complete optional HTTP validation
+
+`new EnvaiClient({ baseUrl, apiKey, strictValidation: true })` enables canonical request and successful JSON-envelope validation across all 76 operations. Validation runs before preflight or mutations and before response unwrapping, using the actual response status. Canonical optional fields, explicit null, constraints and additive-field rules are preserved. Invalid inputs and responses raise `ProtocolError`; API error envelopes retain their existing typed errors and request identity. This option defaults to false; existing specialized validators remain enabled independently. Multipart validates actual binary values without consuming file content; SSE and downloads use separate stream/binary checks.
+
+Capability discovery retains its compatibility rules in strict mode: valid boolean feature maps normalize to positive feature lists, and future family/feature names remain valid discovery data. Other canonical shape and contract-acknowledgment checks remain enforced.

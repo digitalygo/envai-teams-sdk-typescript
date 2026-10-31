@@ -1,14 +1,32 @@
-import { GeneratedClient, type ChatMessageRequest, type ImageGenerationRequest } from './generated.js';
+import { GeneratedClient, type ChatMessageRequest, type ImageGenerationRequest, type TeamDelegationRequest, type TeamDelegationReceipt, type DetachedTaskSnapshot, type ListCompletionsParams, type CompletionCollection, type Completion } from './generated.js';
 import { HttpTransport, delay, positive, type ClientOptions, type RequestOptions } from './http.js';
+import { operations } from './operations.js';
 import { EventStream, type StreamOptions } from './stream.js';
 import { isEvent, isTerminal } from './events.js';
-import { CompatibilityError } from './contract.js';
+import { CompatibilityError, hasCapabilityFeature } from './contract.js';
 import { WikiWebhookVerifier } from './wiki-webhooks.js';
 import { ProtocolError } from './errors.js';
 import type { ATPEvent, KnownEvent } from './event-types.js';
 import { ClientToolRunner, type ToolRunnerOptions } from './tools.js';
 import { JwksCache, ToolRequestVerifier, type SigningJwks, type JwksSource } from './security.js';
+export type CompletionPageParams = ListCompletionsParams;
+export interface CompletionIterationOptions extends RequestOptions { maxPages?: number; }
 export interface TurnOptions extends StreamOptions { toolRunner?: ClientToolRunner; readyTimeoutMs?: number; idempotencyKey?: string; }
+function isToolRequest(event: ATPEvent): boolean {
+  return isEvent(event, 'agent.tool.request') || isEvent(event, 'task.event') && event.data.event_type === 'agent.tool.request';
+}
+async function acceptReplay(events: ATPEvent[], runner?: ClientToolRunner): Promise<void> {
+  // Establish all replayed resolution/terminal barriers before admitting any effects.
+  for (const event of events) if (!isToolRequest(event)) await runner?.accept(event);
+  for (const event of events) if (isToolRequest(event)) await runner?.accept(event);
+}
+export interface BackgroundOptions extends StreamOptions {
+  toolRunner?: ClientToolRunner;
+  readyTimeoutMs?: number;
+  pollIntervalMs?: number;
+  timeoutMs?: number;
+}
+export interface DelegatedJobResult { receipt: TeamDelegationReceipt; task: DetachedTaskSnapshot; }
 export interface TurnResult {
   chatId: string; turnId: string; text: string; lastSeq: number;
   terminal: KnownEvent<'turn.completed' | 'turn.failed' | 'turn.cancelled'>;
@@ -20,6 +38,40 @@ export class EnvaiClient extends GeneratedClient {
     super(new HttpTransport(options));
     this.jwks = options.jwksCache ?? new JwksCache(async signal => await this.getJwks({}, { signal }) as SigningJwks, options.jwksCacheTtlMs);
   }
+  /** Positive numeric page selection from the canonical completion paginator contract. */
+  listCompletionPage(params: CompletionPageParams, options: RequestOptions = {}): Promise<CompletionCollection> {
+    const page = params.page ?? 1;
+    if (!Number.isSafeInteger(page) || page < 1) throw new RangeError('page must be a positive safe integer');
+    return this.transport.request(operations.listCompletions, { ...params, page }, options);
+  }
+  /** Numeric pagination on the configured origin; response links never supply request credentials or filters. */
+  async *iterateCompletions(params: CompletionPageParams, options: CompletionIterationOptions = {}): AsyncGenerator<Completion> {
+    const maxPages = options.maxPages ?? 1_000;
+    if (!Number.isSafeInteger(maxPages) || maxPages < 1) throw new RangeError('maxPages must be a positive safe integer');
+    let page = params.page ?? 1;
+    const path = operations.listCompletions.path.replace('{workspace_id}', encodeURIComponent(params.workspace_id)).replace('{chat_id}', encodeURIComponent(params.chat_id));
+    const current = new URL(this.transport.baseUrl + path);
+    for (let count = 0; count < maxPages; count++, page++) {
+      const result = await this.listCompletionPage({ ...params, page }, options);
+      const last = result.meta.last_page;
+      if (result.meta.current_page !== page || !Number.isSafeInteger(last) || last! < page) throw new ProtocolError('Inconsistent completion pagination metadata');
+      const next = result.links.next;
+      if (next) {
+        let link: URL;
+        try { link = new URL(next, current); } catch { throw new ProtocolError('Invalid completion next-page URL'); }
+        const numbers = link.searchParams.getAll('page');
+        if (link.origin !== current.origin || link.pathname !== current.pathname || link.username || link.password || link.hash || numbers.length !== 1 || numbers[0] !== String(page + 1)) throw new ProtocolError('Unsafe or inconsistent completion next-page URL');
+      }
+      if (Boolean(next) !== (page < last!)) throw new ProtocolError('Completion next link disagrees with pagination metadata');
+      for (const completion of result.data) { options.signal?.throwIfAborted(); yield completion; }
+      if (!next) return;
+    }
+    throw new ProtocolError('Completion pagination exceeded maxPages');
+  }
+  override readonly completions = {
+    list: this.listCompletions.bind(this), get: this.getCompletion.bind(this),
+    page: this.listCompletionPage.bind(this), iterate: this.iterateCompletions.bind(this),
+  };
   createWikiWebhookVerifier(workspaceId: string): WikiWebhookVerifier {
     return new WikiWebhookVerifier(new JwksCache(async signal => await this.getWikiWebhookJwks({}, { signal }) as SigningJwks), workspaceId);
   }
@@ -33,6 +85,7 @@ export class EnvaiClient extends GeneratedClient {
     const controller = new AbortController();
     const signal = options.signal ? AbortSignal.any([controller.signal, options.signal]) : controller.signal;
     const stream = this.events(chatId, { ...options, signal });
+    const unsubscribe = options.toolRunner?.onFailure?.(chatId,error=>controller.abort(error));
     const iterator = stream[Symbol.asyncIterator]();
     const replay: ATPEvent[] = [];
     let replayBytes = 0;
@@ -46,23 +99,26 @@ export class EnvaiClient extends GeneratedClient {
           replayBytes += Buffer.byteLength(JSON.stringify(next.value));
           if (replayBytes > 16 * 1024 * 1024) throw new ProtocolError('Idempotent send replay exceeds 16 MiB; resume the known turn using its cursor');
           replay.push(next.value);
-        } else if (options.toolRunner && !isEvent(next.value, 'agent.tool.request')) await options.toolRunner.accept(next.value);
+        } else if (options.toolRunner && !isToolRequest(next.value)) await options.toolRunner.accept(next.value);
       }
       clearTimeout(timer); timer = undefined;
       const accepted = await this.sendChatMessage({ chat_id: chatId, body: message, idempotencyKey: options.idempotencyKey }, { signal, headers: options.headers });
       if (!accepted.turn_id) throw new ProtocolError('Message acceptance omitted turn_id');
       const replayCompleted = replay.some(event => event.turn_id === accepted.turn_id && isTerminal(event));
+      // The complete replay is known: resolve calls and establish terminal barriers
+      // before any historical request can reach a handler. Keep yielded wire order.
+      for (const event of replay) if (event.turn_id === accepted.turn_id && !isToolRequest(event)) await options.toolRunner?.accept(event);
       for (;;) {
         const replayed = replay.length > 0;
         const next = replayed ? { done: false, value: replay.shift()! } : await iterator.next();
         if (next.done) throw new ProtocolError('Stream ended before terminal event');
         const event = next.value;
         if (event.turn_id !== accepted.turn_id) continue;
-        if (options.toolRunner && !(replayed && replayCompleted && isEvent(event, 'agent.tool.request'))) await options.toolRunner.accept(event);
+        if (options.toolRunner && (!replayed || !replayCompleted && isToolRequest(event))) await options.toolRunner.accept(event);
         yield event;
         if (isTerminal(event)) return;
       }
-    } finally { clearTimeout(timer); stream.close(); await iterator.return?.(); }
+    } finally { unsubscribe?.(); clearTimeout(timer); stream.close(); await iterator.return?.(); }
   }
   async sendAndWait(chatId: string, message: ChatMessageRequest, options: TurnOptions = {}): Promise<TurnResult> {
     let text = '';
@@ -74,6 +130,113 @@ export class EnvaiClient extends GeneratedClient {
       if (isTerminal(event)) return { chatId, turnId: event.turn_id!, text, lastSeq: event.seq, terminal: event, usage: event.data.usage, cost: event.data.cost };
     }
     throw new ProtocolError('Turn stream ended without terminal event');
+  }
+  /** Explicit chat-wide subscription: foreground terminal events do not close detached activity. */
+  async *taskEvents(chatId: string, options: BackgroundOptions = {}): AsyncGenerator<ATPEvent> {
+    if (!this.transport.nativeTasks) throw new CompatibilityError('Create the client with nativeTasks: true to opt in to native-tasks-v1');
+    const capability = await this.transport.negotiate(options);
+    if (!hasCapabilityFeature(capability.features, 'detached_background')) throw new CompatibilityError('Server does not advertise detached_background');
+    const controller = new AbortController();
+    const signal = options.signal ? AbortSignal.any([controller.signal,options.signal]) : controller.signal;
+    const stream = this.events(chatId, { ...options, signal });
+    const unsubscribe = options.toolRunner?.onFailure?.(chatId,error=>controller.abort(error));
+    try {
+      let live = false, bytes = 0;
+      const replay: ATPEvent[] = [];
+      for await (const event of stream) {
+        if (!live) {
+          if (!isEvent(event, 'ping')) {
+            bytes += Buffer.byteLength(JSON.stringify(event));
+            if (bytes > 16 * 1024 * 1024) throw new ProtocolError('Task replay exceeds 16 MiB; resume with a cursor');
+            replay.push(event); continue;
+          }
+          live = true;
+          await acceptReplay(replay, options.toolRunner);
+          for (const prior of replay) yield prior;
+        }
+        await options.toolRunner?.accept(event); yield event;
+      }
+    }
+    finally { unsubscribe?.(); stream.close(); }
+  }
+  /** Submit once, after target SSE is live; wait for the origin job, never the initial target turn. */
+  async delegateAndWait(chatId: string, body: TeamDelegationRequest, options: BackgroundOptions = {}): Promise<DelegatedJobResult> {
+    return this.withTargetStream(body.target_chat_id, options, async (signal, replay) => {
+      const receipt = await this.delegateToTeam({ chat_id: chatId, body }, { signal, headers: options.headers });
+      if (receipt.target_chat_id !== body.target_chat_id) throw new ProtocolError('Delegation receipt changed target chat');
+      await replay();
+      return { receipt, task: await this.pollDelegatedJob(chatId, receipt, { ...options, signal }, body.origin_turn_id) };
+    });
+  }
+  /** Resume a known receipt without submitting it again. Unknown resident tasks remain errors. */
+  async waitForDelegatedJob(chatId: string, receipt: TeamDelegationReceipt, options: BackgroundOptions = {}): Promise<DetachedTaskSnapshot> {
+    return this.withTargetStream(receipt.target_chat_id, options, async (signal, replay) => { await replay(); return this.pollDelegatedJob(chatId, receipt, { ...options, signal }); });
+  }
+  private async pollDelegatedJob(chatId: string, receipt: TeamDelegationReceipt, options: BackgroundOptions, originTurnId?: string): Promise<DetachedTaskSnapshot> {
+    for (;;) {
+      const task = await this.getDetachedTask({ chat_id: chatId, task_id: receipt.task_id }, options);
+      if (task.task_id !== receipt.task_id || task.target_chat_id !== receipt.target_chat_id || originTurnId !== undefined && task.origin_turn_id !== originTurnId) throw new ProtocolError('Task snapshot changed delegated job identity');
+      if (task.status !== 'running') return task;
+      await delay(positive(options.pollIntervalMs ?? 1_000, 'pollIntervalMs'), options.signal);
+    }
+  }
+  private async withTargetStream<T>(targetChatId: string, options: BackgroundOptions, action: (signal: AbortSignal, replay: () => Promise<void>) => Promise<T>): Promise<T> {
+    const controller = new AbortController();
+    const signal = options.signal ? AbortSignal.any([controller.signal, options.signal]) : controller.signal;
+    const timer = setTimeout(() => controller.abort(new DOMException('Delegated job wait timed out', 'TimeoutError')), positive(options.timeoutMs ?? 300_000, 'timeoutMs'));
+    try { return await this.withTargetSubscription(targetChatId, { ...options, signal }, action); }
+    finally { clearTimeout(timer); controller.abort(); }
+  }
+  private async withTargetSubscription<T>(targetChatId: string, options: BackgroundOptions, action: (signal: AbortSignal, replay: () => Promise<void>) => Promise<T>): Promise<T> {
+    if (!this.transport.nativeTasks) throw new CompatibilityError('Create the client with nativeTasks: true to opt in to native-tasks-v1');
+    const capability = await this.transport.negotiate(options);
+    for (const feature of ['cross_team_delegation', 'delegated_job_lifecycle', 'detached_background']) {
+      if (!hasCapabilityFeature(capability.features, feature)) throw new CompatibilityError(`Server does not advertise ${feature}`);
+    }
+    const controller = new AbortController();
+    const signal = options.signal ? AbortSignal.any([controller.signal, options.signal]) : controller.signal;
+    const readyTimer = setTimeout(() => controller.abort(new DOMException('Target subscription ping did not arrive', 'TimeoutError')), positive(options.readyTimeoutMs ?? 30_000, 'readyTimeoutMs'));
+    const stream = this.events(targetChatId, { ...options, signal });
+    const unsubscribe = options.toolRunner?.onFailure?.(targetChatId,error=>controller.abort(error));
+    let ready!: () => void;
+    const readiness = new Promise<void>(resolve => { ready = resolve; });
+    let activate!: () => void, replayed!: () => void;
+    const activation = new Promise<void>(resolve => { activate = resolve; });
+    const replayDone = new Promise<void>(resolve => { replayed = resolve; });
+    const pump = (async () => {
+      let live = false;
+      const pending: ATPEvent[] = [];
+      let bytes = 0;
+      for await (const event of stream) {
+        if (!live) {
+          if (!isEvent(event, 'ping')) {
+            {
+              bytes += Buffer.byteLength(JSON.stringify(event));
+              if (bytes > 16 * 1024 * 1024) throw new ProtocolError('Target replay exceeds 16 MiB; resume with a cursor');
+              pending.push(event);
+            }
+            continue;
+          }
+          live = true; clearTimeout(readyTimer);
+          ready();
+          await activation;
+          signal.throwIfAborted();
+          await acceptReplay(pending, options.toolRunner);
+          replayed();
+        }
+        await options.toolRunner?.accept(event);
+      }
+      throw new ProtocolError('Target tool stream ended before job terminal');
+    })();
+    // A failed stream is a failed wait, including while the non-retryable POST is in flight.
+    try {
+      await Promise.race([readiness, pump]);
+      return await Promise.race([action(signal, () => { activate(); return Promise.race([replayDone, pump]); }), pump]);
+    } finally {
+      unsubscribe?.(); clearTimeout(readyTimer);
+      controller.abort(); activate(); stream.close();
+      await pump.catch(() => {});
+    }
   }
   async generateAndWait(body: ImageGenerationRequest, options: RequestOptions & { pollIntervalMs?: number; timeoutMs?: number } = {}) {
     const controller = new AbortController();
