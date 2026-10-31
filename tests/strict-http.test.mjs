@@ -48,3 +48,10 @@ test('strict canonical additive fields survive and non-JSON/shape-invalid bodies
  let calls=0;const strict=new EnvaiClient({baseUrl:'https://offline.test',strictValidation:true,fetch:async()=>{calls++;throw Error('unexpected');}});const circular={};circular.self=circular;
  for(const metadata of [circular,{value:1n},{value:NaN},{value:Infinity},new Date('2026-10-31T00:00:00Z')])await assert.rejects(strict.createWorkspace({body:{name:'test',metadata}}),ProtocolError);assert.equal(calls,0);
 });
+test('strict capability discovery preserves feature maps and additive future family names before admission',async()=>{
+ for(const features of [['future_feature'],{future_feature:true,disabled:false}]){
+  let posts=0;const advertised={...capabilities,families:['turn','future_family'],features};const c=new EnvaiClient({baseUrl:'https://offline.test',strictValidation:true,fetch:async(url,init)=>{if(url.endsWith('/capabilities'))return json(advertised);posts++;return json({status:'accepted',turn_id:'cmpl_01ARZ3NDEKTSV4RRFFQ69G5FAV'},202);}});
+  const discovered=await c.getCapabilities();assert.deepEqual(discovered.features,['future_feature']);assert.deepEqual(discovered.families,['turn','future_family']);await c.sendChatMessage({chat_id:'cht_01ARZ3NDEKTSV4RRFFQ69G5FAV',body:{message:'test'}});assert.equal(posts,1);
+ }
+ for(const features of [{future:'true'},[1],null]){const c=new EnvaiClient({baseUrl:'https://offline.test',strictValidation:true,fetch:async()=>json({...capabilities,features})});await assert.rejects(c.getCapabilities(),ProtocolError);}
+});

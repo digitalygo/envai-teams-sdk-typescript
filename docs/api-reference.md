@@ -51,3 +51,5 @@ Diagnostic image requests accept `files: Blob[]` (one to four files, at most 102
 ### Complete optional HTTP validation
 
 `new EnvaiClient({ baseUrl, apiKey, strictValidation: true })` enables canonical request and successful JSON-envelope validation across all 76 operations. Validation runs before preflight or mutations and before response unwrapping, using the actual response status. Canonical optional fields, explicit null, constraints and additive-field rules are preserved. Invalid inputs and responses raise `ProtocolError`; API error envelopes retain their existing typed errors and request identity. This option defaults to false; existing specialized validators remain enabled independently. Multipart validates actual binary values without consuming file content; SSE and downloads use separate stream/binary checks.
+
+Capability discovery retains its compatibility rules in strict mode: valid boolean feature maps normalize to positive feature lists, and future family/feature names remain valid discovery data. Other canonical shape and contract-acknowledgment checks remain enforced.

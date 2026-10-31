@@ -176,5 +176,17 @@ export function validateHttpResponse(id: string, status: number, value: unknown,
   if (!code) throw new ProtocolError(`Undeclared success status for ${id}`);
   const response = resolveSchema(operation.root, responses[code], `${operation.pointer}/responses/${code}`);
   const schema = schemaObject(schemaObject(response.value.content)['application/json']).schema;
-  if (schema !== undefined) assertHttpSchema(operation, `${response.pointer}/content/application~1json/schema`, value, `${id} response`);
+  if (schema !== undefined && ['getCapabilities','getCapabilitiesLegacy','negotiateContract'].includes(id)) {
+    const key = `${operation.prefix}:capability-discovery:${id}`; let validate = validators.get(key);
+    if(!validate) {
+      // Discovery is explicitly forward compatible, including legacy feature maps.
+      // Preserve canonical bytes and every other schema/acknowledgment constraint.
+      const discovery = structuredClone(resolveSchema(operation.root,schema,'').value);
+      const properties = schemaObject(discovery.properties);
+      for(const field of ['families','features']) delete schemaObject(schemaObject(properties[field]).items).enum;
+      if(properties.features) properties.features = {anyOf:[properties.features,{type:'object',additionalProperties:{type:'boolean'}}]};
+      validate = ajv.compile({...discovery,components:operation.root.components}); validators.set(key,validate);
+    }
+    if(!validate(value)) throw new ProtocolError(`Invalid ${id} response: ` + ajv.errorsText(validate.errors?.slice(0,3)));
+  } else if (schema !== undefined) assertHttpSchema(operation, `${response.pointer}/content/application~1json/schema`, value, `${id} response`);
 }
