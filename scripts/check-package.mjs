@@ -10,7 +10,7 @@ const target=mkdtempSync(resolve('.package-smoke-'));
 try{
  execFileSync('tar',['-xzf',pack.filename,'-C',target]);
  const module=await import(pathToFileURL(resolve(target,'package/dist/index.js')));
- if(Object.keys(module.operations).length!==71)throw Error('Packaged inventory mismatch');
+ if(Object.keys(module.operations).length!==76)throw Error('Packaged inventory mismatch');
  const test=JSON.parse(readFileSync('testdata/contracts/events-valid.json','utf8'))[0];
  if(module.parseEvent(test).type!=='ping')throw Error('Packaged legacy schema unavailable');
  if(module.parseEvent({...test,v:3}).v!==3)throw Error('Packaged contract 3 schema unavailable');

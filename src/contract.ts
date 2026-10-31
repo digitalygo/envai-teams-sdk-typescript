@@ -49,7 +49,7 @@ function assertLegacyUsageCosts(value: unknown): void {
 
 export function validateContractValue<T>(name: string, value: unknown, version: ContractVersion = 3): T {
   if (version !== 2 && version !== 3) throw new CompatibilityError('Unsupported selected contract version');
-  const root = ['Completion', 'CompletionCollection', 'ChatAttachment', 'ChatAttachmentCollection', 'AttachmentManifest', 'ChatMessageAccepted'].includes(name) ? `urn:envai:http:v${version}#/components/schemas/` : 'urn:envai:wiki#/$defs/';
+  const root = ['Completion', 'CompletionCollection', 'ChatAttachment', 'ChatAttachmentCollection', 'AttachmentManifest', 'ChatMessageAccepted', 'NativeDeliveryReceipt', 'TeamDelegationReceipt', 'DetachedTaskSnapshot', 'PhaseClassificationResult', 'NativeDeliveryRequest', 'TeamDelegationRequest', 'PhaseClassificationRequest'].includes(name) ? `urn:envai:http:v${version}#/components/schemas/` : 'urn:envai:wiki#/$defs/';
   const ref = root + name;
   let validate = validators.get(ref);
   if (!validate) { validate = ajv.compile({ $ref: ref }); validators.set(ref, validate); }
@@ -64,6 +64,7 @@ export function validateContractValue<T>(name: string, value: unknown, version: 
 }
 const responseSchemas: Record<string, string> = {
   sendChatMessage: 'ChatMessageAccepted',
+  deliverWorkflowResult: 'NativeDeliveryReceipt', delegateToTeam: 'TeamDelegationReceipt', getDetachedTask: 'DetachedTaskSnapshot', classifyPhase: 'PhaseClassificationResult',
   uploadChatAttachment: 'ChatAttachment', getChatAttachment: 'ChatAttachment', retryChatAttachment: 'ChatAttachment', deleteChatAttachment: 'ChatAttachment',
   uploadWikiSource: 'WikiSource', getWikiSource: 'WikiSource', withdrawWikiSource: 'WikiSource',
   createWikiInboxRun: 'WikiOperation', createWikiOutboxRun: 'WikiOperation', createWikiSyncRun: 'WikiOperation', getWikiOperation: 'WikiOperation',
@@ -77,7 +78,18 @@ export function validateResponse(id: string, value: unknown, version: ContractVe
     const features = capability.features;
     if (features !== undefined && !Array.isArray(features)) value = { ...capability, features: Object.keys(features as Record<string, boolean>).filter(name => (features as Record<string, boolean>)[name]).map(name => name) };
   }
+  if (id === 'cancelDetachedTask') {
+    const result = value as { task_id?: unknown; status?: unknown; subtree?: unknown } | null;
+    if (!result || typeof result !== 'object' || Array.isArray(result) || typeof result.task_id !== 'string' || !result.task_id || result.status !== 'cancelled' || typeof result.subtree !== 'boolean' || Object.keys(result).some(key => !['task_id', 'status', 'subtree'].includes(key))) throw new ProtocolError('Invalid task cancellation receipt', value);
+  }
   if (id === 'listChatAttachments') validateContractValue('ChatAttachmentCollection', { data: value }, version);
   const name = responseSchemas[id];
   return name ? validateContractValue(name, value, version) : value;
+}
+
+export function validateBackgroundRequest(id: string, value: unknown): void {
+  const name = ({ deliverWorkflowResult: 'NativeDeliveryRequest', delegateToTeam: 'TeamDelegationRequest', classifyPhase: 'PhaseClassificationRequest' } as Record<string, string>)[id];
+  if (name) validateContractValue(name, value);
+  if (id === 'classifyPhase' && (value as { task_context: unknown }).task_context === null) throw new ProtocolError('task_context must be non-null JSON');
+  if (id === 'cancelDetachedTask' && (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(k => k !== 'subtree') || ('subtree' in value && typeof value.subtree !== 'boolean'))) throw new ProtocolError('Invalid task cancellation body');
 }

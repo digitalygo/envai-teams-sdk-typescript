@@ -1,11 +1,11 @@
 # Envai Teams TypeScript SDK
 
-A Node.js 22+ ESM client for the current Envai Teams **alpha** API. It includes typed primitives for all **71 HTTP operations**, all **29 ATP event types**, async SSE streams, turn helpers, and opt-in signed client tools.
+A Node.js 22+ ESM client for the current Envai Teams **alpha** API. It includes typed primitives for all **76 HTTP operations**, all **36 ATP event types**, async SSE streams, turn helpers, and opt-in signed client tools.
 
 **Status:** alpha prerelease available as a [GitHub release archive](https://github.com/digitalygo/envai-teams-sdk-typescript/releases/tag/v1.0.0-alpha.1). The package is not currently published to the npm registry. Prerelease APIs may change; review upgrades deliberately. API compatibility limits are described below.
 
 - [Installation and configuration](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/getting-started.md)
-- [API and models](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-reference.md) · [all 71 operations](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-inventory.md)
+- [API and models](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-reference.md) · [all 76 operations](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-inventory.md)
 - [Streaming and recovery](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/streaming.md)
 - [Client-tool safety and deployment](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/client-tools.md)
 
@@ -189,9 +189,9 @@ The bundled contracts describe API 3.0.0 and negotiated ATP v3. Exact source has
 
 ## Development and provenance
 
-`npm run generate` deterministically regenerates 109 HTTP models, request/response types, operation primitives, and 29 event payload types from both pinned contracts. SSE, cryptography, tools, and helpers remain handwritten. `npm run check:generated` fails on drift without rewriting files. The original v2 snapshots retain provenance in `testdata/contracts/provenance.json`; current shared v3/wiki sources are identified in `contracts/manifest.json`. `sources` preserves their original commit/path, byte count, SHA-256 and Git blob SHA. `generated_fixtures` separately identifies SDK-authored conformance cases and generated OpenAPI JSON. Public guides are SDK documentation, not copied contract sources. Tests verify every retained source and fixture hash.
+`npm run generate` deterministically regenerates 123 HTTP models, request/response types, operation primitives, and 36 event payload types from both pinned contracts. SSE, cryptography, tools, and helpers remain handwritten. `npm run check:generated` fails on drift without rewriting files. The original v2 snapshots retain provenance in `testdata/contracts/provenance.json`; current shared v3/wiki sources are identified in `contracts/manifest.json`. `sources` preserves their original commit/path, byte count, SHA-256 and Git blob SHA. `generated_fixtures` separately identifies SDK-authored conformance cases and generated OpenAPI JSON. Public guides are SDK documentation, not copied contract sources. Tests verify every retained source and fixture hash.
 
-Tests make no live Envai requests and need no credentials. CI typechecks the runtime and examples, verifies generation, tests all 71 operations plus schema/SSE/signature/state-machine conformance, enforces at least 95% line/function and 90% branch coverage, and smoke-tests the packed archive on Node 22 and 24. Signature fixtures use public RFC 8032 test-key material only, never account credentials or production signing keys.
+Tests make no live Envai requests and need no credentials. CI typechecks the runtime and examples, verifies generation, tests all 76 operations plus schema/SSE/signature/state-machine conformance, enforces at least 95% line/function and 90% branch coverage, and smoke-tests the packed archive on Node 22 and 24. Signature fixtures use public RFC 8032 test-key material only, never account credentials or production signing keys.
 
 MIT, copyright 2026 DigItalyGo. Existing license text is preserved.
 
@@ -201,3 +201,7 @@ MIT, copyright 2026 DigItalyGo. Existing license text is preserved.
 The client defaults to negotiated contract 3, with versioned ATP paths and nullable provider costs. Read [the migration guide](docs/MIGRATION_V3.md) before upgrading a v2 consumer. [Wiki integration](docs/WIKI.md) covers filesystem-backed upload/conversion, explicit inbox/outbox/sync, exhaustive catalog reads, exact-byte Ed25519 webhooks and PostgreSQL atomic receipt/application outbox. Requires Node.js 22+; no browser runtime is claimed.
 
 See [chat attachments](docs/CHAT_ATTACHMENTS.md) for upload, conversion, retry and streaming with files. This surface is unreleased until the matching backend is deployed.
+
+## Background workflows
+
+See [detached tasks and delegated jobs](docs/BACKGROUND.md) for native deliveries, team delegation, task lookup/cancellation, phase classification, signed task tools, and final job waiting. [The phase example](examples/background.ts) shows runner and cancellation ownership. Foreground turn helpers keep their existing terminal behavior.

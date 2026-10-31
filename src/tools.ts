@@ -10,7 +10,7 @@ import type { ATPEvent, KnownEvent } from './event-types.js';
 import { positive, type RequestOptions, type Observation } from './http.js';
 import { canonicalize, ToolRequestVerifier } from './security.js';
 
-export interface ToolContext { signal: AbortSignal; chatId: string; turnId: string; callId: string; idempotencyKey: string; }
+export interface ToolContext { signal: AbortSignal; chatId: string; turnId: string; taskId?: string; callId: string; idempotencyKey: string; }
 export interface LocalTool<T = Record<string, unknown>> {
   name: string; description?: string;
   parameters: { type: 'object'; [key: string]: unknown };
@@ -48,7 +48,7 @@ export class ClientToolRegistry {
 export type ToolState = 'claimed' | 'completed' | 'submitted' | 'ambiguous' | 'resolved' | 'abandoned';
 export interface ToolRecord {
   state: ToolState; fingerprint: string; chatId: string; turnId: string; callId: string;
-  output?: string; isError?: boolean;
+  taskId?: string; output?: string; isError?: boolean;
 }
 /** Validate persisted JSON before treating it as an execution barrier or changing it.
  * Keys are the opaque values returned by ClientToolRunner.key (or its turn barriers).
@@ -61,7 +61,7 @@ export function assertToolRecord(key: string, value: unknown, turnId?: string): 
   if (!Array.isArray(identity) || ![3, 4].includes(identity.length) || identity.some(v => typeof v !== 'string' || !v)) fail();
   const parts = identity as string[];
   const barrier = parts.length === 4;
-  if (barrier && parts[2] !== 'turn') fail();
+  if (barrier && !['turn', 'task'].includes(parts[2]!)) fail();
   const ulid = '[0-7][0-9a-hjkmnp-tv-zA-HJKMNP-TV-Z]{25}';
   if (!new RegExp('^cht_' + ulid + '$').test(parts[1]!) || (!barrier && !new RegExp('^tc_' + ulid + '$').test(parts[2]!))) fail();
   if (!value || typeof value !== 'object' || Array.isArray(value)) fail();
@@ -69,8 +69,9 @@ export function assertToolRecord(key: string, value: unknown, turnId?: string): 
   const states: readonly unknown[] = ['claimed', 'completed', 'submitted', 'ambiguous', 'resolved', 'abandoned'];
   if (!['state', 'fingerprint', 'chatId', 'turnId', 'callId'].every(k => Object.hasOwn(record, k)) || !states.includes(record.state)) fail();
   if (record.chatId !== parts[1] || typeof record.turnId !== 'string' || !new RegExp('^cmpl_' + ulid + '$').test(record.turnId) || (turnId !== undefined && record.turnId !== turnId)) fail();
-  if (record.callId !== (barrier ? '' : parts[2]) || (barrier && record.turnId !== parts[3])) fail();
+  if (record.callId !== (barrier ? '' : parts[2]) || (barrier && (parts[2] === 'task' ? record.taskId !== parts[3] : record.turnId !== parts[3]))) fail();
   if (typeof record.fingerprint !== 'string' || (!/^[a-f0-9]{64}$/.test(record.fingerprint) && !(record.fingerprint === '' && (barrier || record.state === 'resolved')))) fail();
+  if (record.taskId !== undefined && (typeof record.taskId !== 'string' || !record.taskId)) fail();
   const hasOutput = Object.hasOwn(record, 'output'), hasError = Object.hasOwn(record, 'isError');
   if (hasOutput !== hasError || (hasOutput && (typeof record.output !== 'string' || !record.output || Buffer.byteLength(record.output, 'utf8') > 131_072 || typeof record.isError !== 'boolean'))) fail();
   if (['completed', 'submitted', 'ambiguous'].includes(record.state as string) && !hasOutput) fail();
@@ -101,7 +102,7 @@ export class MemoryToolStateStore implements ToolStateStore {
     const value = this.#records.get(key); assertToolRecord(key, value);
     if (!expected.includes(value.state)) return false;
     const next = { ...value, ...patch }; assertToolRecord(key, next, value.turnId);
-    if (next.fingerprint !== value.fingerprint) throw new ToolExecutionError('Cannot change tool call identity', 'invalid_tool_state');
+    if (next.fingerprint !== value.fingerprint || next.taskId !== value.taskId) throw new ToolExecutionError('Cannot change tool call identity', 'invalid_tool_state');
     this.#records.set(key, structuredClone(next)); return true;
   }
 }
@@ -111,7 +112,7 @@ export interface ToolRunnerOptions {
   submit: (chatId: string, body: { call_id: string; output: string; is_error: boolean }, options: RequestOptions) => Promise<void>;
   concurrency?: number; maxPending?: number; signal?: AbortSignal; onObservation?: (event: Observation) => void;
 }
-interface Job { key: string; fingerprint: string; event: KnownEvent<'agent.tool.request'>; controller: AbortController; admitted: number; }
+interface Job { taskId?: string; key: string; fingerprint: string; event: KnownEvent<'agent.tool.request'>; controller: AbortController; admitted: number; }
 function controlled(code: string): { output: string; isError: true } { return { output: JSON.stringify({ code, message: `Client tool failed: ${code}` }), isError: true }; }
 function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   signal.throwIfAborted();
@@ -143,24 +144,43 @@ export class ClientToolRunner {
     }
     return value;
   }
-  private async ended(event: ATPEvent): Promise<boolean> {
+  private async ended(event: ATPEvent, taskId?: string): Promise<boolean> {
     if (!event.turn_id) return false;
-    const key = this.turnKey(event.chat_id, event.turn_id);
+    const key = taskId ? JSON.stringify([this.#options.scope, event.chat_id, 'task', taskId]) : this.turnKey(event.chat_id, event.turn_id);
     if (this.#endingTurns.has(key)) return true;
     return (await this.stored(key, event.turn_id)) !== undefined || this.#endingTurns.has(key);
   }
   private observe(event: Observation): void { try { this.#options.onObservation?.(event); } catch {} }
   /** Admit verified requests without awaiting handler completion, so result/terminal events remain observable. */
   async accept(input: ATPEvent): Promise<void> {
-    const event = parseEvent(input); // Fail closed even when callers bypass the SSE parser.
+    let event = parseEvent(input); // Fail closed even when callers bypass the SSE parser.
     const signal = this.#options.signal ? AbortSignal.any([this.#abort.signal, this.#options.signal]) : this.#abort.signal;
     signal.throwIfAborted();
+    let taskId: string | undefined;
+    if (isEvent(event, 'task.completed') || isEvent(event, 'task.failed') || isEvent(event, 'task.cancelled')) {
+      const taskKey = JSON.stringify([this.#options.scope, event.chat_id, 'task', event.data.task_id]);
+      this.#endingTurns.add(taskKey);
+      const jobs = [...this.#jobs.values()].filter(job => job.event.chat_id === event.chat_id && job.taskId === event.data.task_id);
+      for (const job of jobs) job.controller.abort(new DOMException('Task ended', 'AbortError'));
+      await this.stored(taskKey, event.data.origin_turn_id);
+      await this.#options.store.claim(taskKey, { state: 'abandoned', fingerprint: '', chatId: event.chat_id, turnId: event.data.origin_turn_id, taskId: event.data.task_id, callId: '' });
+      await Promise.all(jobs.map(job => this.#options.store.transition(job.key, ['claimed', 'completed', 'submitted'], { state: 'abandoned' })));
+      this.#endingTurns.delete(taskKey);
+      return;
+    }
+    if (isEvent(event, 'task.event')) {
+      if (!['agent.tool.request', 'agent.tool.result'].includes(event.data.event_type)) return;
+      taskId = event.data.task_id;
+      // Keep the execution chat and agent, validate the actual inner payload, and verify its unchanged signature below.
+      event = parseEvent({ ...event, type: event.data.event_type, data: event.data.event_payload, turn_id: event.data.origin_turn_id });
+    }
     if (isEvent(event, 'agent.tool.result')) {
       const key = this.key(event.chat_id, event.data.call_id);
       this.#resolvingCalls.add(key);
       this.#jobs.get(key)?.controller.abort(new DOMException('Server resolved tool', 'AbortError'));
-      await this.stored(key, event.turn_id!);
-      await this.#options.store.claim(key, { state: 'resolved', fingerprint: '', chatId: event.chat_id, turnId: event.turn_id!, callId: event.data.call_id });
+      const resolved = await this.stored(key, event.turn_id!);
+      if (resolved && resolved.taskId !== taskId) throw new ToolExecutionError('Call ID changed task ownership', 'call_id_conflict');
+      await this.#options.store.claim(key, { state: 'resolved', fingerprint: '', chatId: event.chat_id, turnId: event.turn_id!, ...(taskId ? { taskId } : {}), callId: event.data.call_id });
       await this.#options.store.transition(key, ['claimed','completed','submitted','ambiguous','abandoned'], { state: 'resolved' });
       this.#resolvingCalls.delete(key);
       return;
@@ -168,7 +188,7 @@ export class ClientToolRunner {
     if (isTerminal(event)) {
       const turnKey = this.turnKey(event.chat_id, event.turn_id!);
       this.#endingTurns.add(turnKey);
-      const endingJobs = [...this.#jobs.values()].filter(j => j.event.chat_id === event.chat_id && j.event.turn_id === event.turn_id);
+      const endingJobs = [...this.#jobs.values()].filter(j => j.event.chat_id === event.chat_id && j.event.turn_id === event.turn_id && !j.taskId);
       for (const job of endingJobs) job.controller.abort(new DOMException('Turn ended', 'AbortError'));
       // Persist a turn admission barrier even if no request has arrived yet.
       await this.stored(turnKey, event.turn_id!);
@@ -184,22 +204,22 @@ export class ClientToolRunner {
     await this.#options.verifier.verify(event.data, signal);
     const key = this.key(event.chat_id, event.data.call_id);
     const fingerprint = createHash('sha256').update(event.data.call_id + '\n' + event.data.tool_name + '\n' + canonicalize(event.data.args)).digest('hex');
-    if (this.#resolvingCalls.has(key) || await this.ended(event)) return;
+    if (this.#resolvingCalls.has(key) || await this.ended(event, taskId)) return;
     const existing = await this.stored(key, event.turn_id!);
     if (this.#resolvingCalls.has(key)) return;
-    if (existing !== undefined) { if (existing.fingerprint && existing.fingerprint !== fingerprint) throw new ToolExecutionError('Call ID reused with different arguments', 'call_id_conflict'); return; }
+    if (existing !== undefined) { if (existing.taskId !== taskId) throw new ToolExecutionError('Call ID changed task ownership', 'call_id_conflict'); if (existing.fingerprint && existing.fingerprint !== fingerprint) throw new ToolExecutionError('Call ID reused with different arguments', 'call_id_conflict'); return; }
     if (this.#jobs.size + this.#admitting >= this.#maxPending) throw new ToolExecutionError('Client tool queue is full', 'queue_full');
-    const record: ToolRecord = { state: 'claimed', fingerprint, chatId: event.chat_id, turnId: event.turn_id!, callId: event.data.call_id };
+    const record: ToolRecord = { state: 'claimed', fingerprint, chatId: event.chat_id, turnId: event.turn_id!, ...(taskId ? { taskId } : {}), callId: event.data.call_id };
     this.#admitting++;
     let claimed: boolean;
     try { claimed = await this.#options.store.claim(key, record); } finally { this.#admitting--; }
     if (!claimed) return;
-    if (this.#resolvingCalls.has(key) || await this.ended(event)) {
+    if (this.#resolvingCalls.has(key) || await this.ended(event, taskId)) {
       await this.#options.store.transition(key, ['claimed'], { state: 'abandoned' }); return;
     }
     const current = await this.stored(key, event.turn_id!, fingerprint);
     if (current?.state !== 'claimed' || this.#resolvingCalls.has(key)) return;
-    const job: Job = { key, fingerprint, event, controller: new AbortController(), admitted };
+    const job: Job = { taskId, key, fingerprint, event, controller: new AbortController(), admitted };
     this.#jobs.set(key, job); this.#queue.push(job); this.pump();
   }
   private pump(): void {
@@ -210,7 +230,7 @@ export class ClientToolRunner {
     }
   }
   private async execute(job: Job): Promise<void> {
-    const { event, key } = job;
+    const { event, key, taskId } = job;
     const registered = this.#options.registry.get(event.data.tool_name);
     const timeout = new AbortController();
     const signal = AbortSignal.any([job.controller.signal, this.#abort.signal, timeout.signal, ...(this.#options.signal ? [this.#options.signal] : [])]);
@@ -218,7 +238,7 @@ export class ClientToolRunner {
     this.observe({ kind: 'tool.start', chatId: event.chat_id, turnId: event.turn_id, callId: event.data.call_id });
     try {
       signal.throwIfAborted();
-      if (await this.ended(event) || (await this.stored(key, event.turn_id!, job.fingerprint))?.state !== 'claimed') {
+      if (await this.ended(event, taskId) || (await this.stored(key, event.turn_id!, job.fingerprint))?.state !== 'claimed') {
         await this.#options.store.transition(key, ['claimed'], { state: 'abandoned' }); return;
       }
       signal.throwIfAborted();
@@ -230,7 +250,7 @@ export class ClientToolRunner {
       else {
         timer = setTimeout(() => timeout.abort(new DOMException('Local tool deadline exceeded', 'TimeoutError')), remaining);
         try {
-          handler = Promise.resolve().then(() => { signal.throwIfAborted(); return registered.definition.handler(event.data.args, { signal, chatId: event.chat_id, turnId: event.turn_id!, callId: event.data.call_id, idempotencyKey: key }); });
+          handler = Promise.resolve().then(() => { signal.throwIfAborted(); return registered.definition.handler(event.data.args, { signal, chatId: event.chat_id, turnId: event.turn_id!, ...(taskId ? { taskId } : {}), callId: event.data.call_id, idempotencyKey: key }); });
           const value = await abortable(handler, signal);
           const output = typeof value === 'string' ? value : JSON.stringify(value);
           result = typeof output !== 'string' ? controlled('invalid_output') : output.length === 0 ? controlled('empty_output') : Buffer.byteLength(output, 'utf8') > 131_072 ? controlled('output_too_large') : { output, isError: false };

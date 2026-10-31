@@ -32,7 +32,7 @@ export class PostgresToolStateStore implements ToolStateStore {
     if (current === undefined || !expected.includes(current.state)) return false;
     const next = { ...current, ...patch };
     assertToolRecord(key, next, current.turnId);
-    if (next.fingerprint !== current.fingerprint) throw new ToolExecutionError('Cannot change tool call identity', 'invalid_tool_state');
+    if (next.fingerprint !== current.fingerprint || next.taskId !== current.taskId) throw new ToolExecutionError('Cannot change tool call identity', 'invalid_tool_state');
     // Compare the complete validated JSON in the atomic UPDATE. A racing writer makes this a no-op.
     const result = await this.db.query('UPDATE envai_tool_state SET record = $2::jsonb WHERE key = $1 AND record = $3::jsonb RETURNING key', [key, JSON.stringify(next), JSON.stringify(current)]);
     return result.rowCount === 1;
