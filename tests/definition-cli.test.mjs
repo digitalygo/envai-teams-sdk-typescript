@@ -44,9 +44,11 @@ test('CLI plan/dry-run are read-only; explicit sync persists state and readiness
  const old=globalThis.fetch,calls=[],out=[];globalThis.fetch=negotiatedFetch(async(url,init)=>{calls.push(init.method);return json(url.endsWith('/models')?{object:'list',data:[],defaults:{orchestrator:'x',subagent:'x'}}:{data:[]});});
  const env={ENVAI_DEFINITIONS:manifest,ENVAI_DEFINITION_STATE:state,ENVAI_DEFINITION_SCOPE:'test-account',ENVAI_BASE_URL:'https://example.test/api/v1',ENVAI_API_KEY:'test-secret'},io={out:t=>out.push(JSON.parse(t)),err:t=>out.push(t)};
  try{
-  for(const command of [['plan'],['status','--fail-on-drift'],['sync','--dry-run','--only','tools','--adopt','--overwrite-drift','--recreate-missing','--prune']])assert.equal(await runDefinitionsCli(command,env,io),0);
+  for(const command of [['plan'],['plan','--strict-validation'],['status','--fail-on-drift'],['sync','--dry-run','--only','tools','--adopt','--overwrite-drift','--recreate-missing','--prune']])assert.equal(await runDefinitionsCli(command,env,io),0);
   await assert.rejects(access(state));assert.ok(calls.every(m=>m==='GET'));
   assert.equal(await runDefinitionsCli(['plan','--only','invalid'],env,io),1);
+  assert.equal(await runDefinitionsCli(['plan'],{...env,ENVAI_STRICT_VALIDATION:'true'},io),0);
+  assert.equal(await runDefinitionsCli(['plan'],{...env,ENVAI_STRICT_VALIDATION:'invalid'},io),1);
   assert.equal(await runDefinitionsCli(['sync'],env,io),0);assert.equal(out.at(-1).manifest_ready,true);
   assert.equal(await runDefinitionsCli(['state'],env,io),0);assert.ok(out.at(-1).ready);
  }finally{globalThis.fetch=old;await rm(dir,{recursive:true,force:true});}

@@ -1,4 +1,4 @@
-import { CompatibilityError, hasCapabilityFeature, validateBackgroundRequest, validateResponse, type ContractVersion } from './contract.js';
+import { CompatibilityError, hasCapabilityFeature, validateBackgroundRequest, validateResponse, validateHttpRequest, validateHttpResponse, type ContractVersion } from './contract.js';
 import { apiError, EnvaiError, ProtocolError, TransportError } from './errors.js';
 export type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 export interface RequestOptions { signal?: AbortSignal; headers?: HeadersInit; }
@@ -15,6 +15,8 @@ export interface Observation {
 }
 export interface ClientOptions {
   apiKey?: string; baseUrl: string;
+  /** Validate all canonical HTTP requests and successful JSON envelopes. Defaults to false for legacy compatibility. */
+  strictValidation?: boolean;
   /** Contract 2 permits only historical reads. Contract 3 is the default. */
   contractVersion?: ContractVersion;
   /** Opt in to native detached-task events and model diagnostics. Requires contract 3. */
@@ -48,13 +50,15 @@ export function retryAfterMs(header: string | null, now = Date.now()): number | 
   return Number.isFinite(result) ? Math.max(0, result) : undefined;
 }
 export class HttpTransport {
-  readonly nativeTasks: boolean;
+  readonly nativeTasks: boolean; readonly strictValidation: boolean;
   readonly baseUrl: string; readonly jwksUrl: string; readonly #contractVersion: ContractVersion;
   readonly #key?: string; readonly #fetch: Fetch; readonly #observe?: ClientOptions['onObservation'];
   readonly #timeout: number; readonly #connectTimeout: number; readonly #retries: number; readonly #baseDelay: number; readonly #maxDelay: number;
   constructor(options: ClientOptions) {
     this.#contractVersion = options.contractVersion ?? 3;
     this.nativeTasks = options.nativeTasks ?? false;
+    if(options.strictValidation !== undefined && typeof options.strictValidation !== 'boolean') throw new TypeError('strictValidation must be boolean');
+    this.strictValidation = options.strictValidation ?? false;
     if (this.nativeTasks && this.contractVersion !== 3) throw new CompatibilityError('Native tasks require contract 3');
     if (this.contractVersion !== 2 && this.contractVersion !== 3) throw new TypeError('Unsupported contractVersion');
     const base = new URL(options.baseUrl);
@@ -80,6 +84,7 @@ export class HttpTransport {
   observe(event: Observation): void { try { this.#observe?.(Object.freeze({ ...event })); } catch { /* Telemetry cannot change protocol behavior. */ } }
   async request<T>(operation: Operation, params: object, options: RequestOptions = {}): Promise<T> {
     const values = params as Record<string, unknown>;
+    if(this.strictValidation) validateHttpRequest(operation.id, values, this.contractVersion);
     validateBackgroundRequest(operation.id, values.body);
     const sourceMode = operation.id === 'uploadWikiSource' ? sourceProcessing((values.body as { processing?: unknown } | undefined)?.processing) : undefined;
     let path = operation.path;
@@ -183,6 +188,7 @@ export class HttpTransport {
         if (operation.mode === 'empty') return undefined as T;
         let data: unknown;
         try { data = await response.json(); } catch { throw new ProtocolError('Invalid JSON response'); }
+        if(this.strictValidation) validateHttpResponse(operation.id,response.status,data,this.contractVersion);
         if (operation.unwrap) {
           if (!data || typeof data !== 'object' || !('data' in data)) throw new ProtocolError('Missing resource data envelope', data);
           return validateResponse(operation.id, (data as { data: T }).data, this.contractVersion) as T;

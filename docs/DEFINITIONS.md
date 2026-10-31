@@ -115,3 +115,5 @@ connection rather than return it to the pool (the standard `pg` pool does this).
 The store supplies an error when advisory lock acquisition or release cannot be
 confirmed. Memory, file and SQL sessions serialize concurrent operations and
 expire after their `withScope` callback completes.
+
+Use `--strict-validation` or `ENVAI_STRICT_VALIDATION=true` to enable the client's complete canonical HTTP request/response validation in remote CLI commands. The environment selector prefix applies to this option too; the default remains false.

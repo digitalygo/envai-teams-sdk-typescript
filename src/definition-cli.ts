@@ -18,7 +18,7 @@ export async function runDefinitionsCli(args: string[], env: NodeJS.ProcessEnv =
     const switches = new Set<string>();
     for (let i = 0; i < flags.length; i++) {
       const original = flags[i]!; const flag = ({'--connection':'--scope','--path':'--manifest'} as Record<string,string>)[original] ?? original;
-      if (['--json','--dry-run','--adopt','--overwrite-drift','--recreate-missing','--prune','--fail-on-drift'].includes(flag)) switches.add(flag);
+      if (['--json','--strict-validation','--dry-run','--adopt','--overwrite-drift','--recreate-missing','--prune','--fail-on-drift'].includes(flag)) switches.add(flag);
       else if (['--manifest','--state','--scope','--env','--only','--store'].includes(flag)) {
         const value = flags[++i]; if (!value || value.startsWith('--') || values[flag]) throw new Error('Invalid option'); values[flag] = value;
       } else throw new Error('Unknown option');
@@ -46,7 +46,9 @@ export async function runDefinitionsCli(args: string[], env: NodeJS.ProcessEnv =
     if (command === 'state') { emit({format_version:'1',...await store.withScope(scope, session => session.read())}); return 0; }
     const baseUrl = env[`${prefix}BASE_URL`], apiKey = env[`${prefix}API_KEY`];
     if (!baseUrl || !apiKey) throw new Error('Connection configuration is required');
-    const client = new EnvaiClient({ baseUrl, apiKey });
+    const strictSetting = env[`${prefix}STRICT_VALIDATION`];
+    if(strictSetting !== undefined && !['true','false'].includes(strictSetting)) throw new Error('STRICT_VALIDATION must be true or false');
+    const client = new EnvaiClient({ baseUrl, apiKey, strictValidation: switches.has('--strict-validation') || strictSetting === 'true' });
     const synchronizer = new DefinitionSynchronizer(scope, store, new ClientDefinitionRemote(client), manifest);
     const only = values['--only'];
     if (only && !['all','tools','agents','teams'].includes(only)) throw new Error('Invalid resource selection');
