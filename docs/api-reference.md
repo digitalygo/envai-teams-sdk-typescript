@@ -41,3 +41,9 @@ Exact request/response declarations are in [generated.ts](../src/generated.ts), 
 ## Native background work
 
 Opt in with `nativeTasks:true`. Native typed models include `NativeDeliveryRequest/Receipt`, `TeamDelegationRequest/Receipt`, `DetachedTaskSnapshot` and `PhaseClassificationRequest/Result`. Use `delegateAndWait` or `waitForDelegatedJob` for full origin-task outcomes, and `taskEvents` for a subscription that survives origin turn completion. See [background workflows](BACKGROUND.md) for negotiated capabilities, signature verification, deduplication and cancellation ownership.
+
+### Completion pages
+
+`client.completions.page({ workspace_id, chat_id, page: 2 })` validates a positive safe integer page. `client.completions.iterate(params, { maxPages: 1000, signal })` yields completions across numeric pages using the normal authenticated GET transport, including retries, contract acknowledgment, errors, timeout and cancellation. It preserves the original filters and API base path. Absolute or relative response links must identify the next page on the same origin and collection path; malformed, cross-origin, credential-bearing and inconsistent links fail closed before a second request. Collection pagination is not a snapshot when records change between pages.
+
+Diagnostic image requests accept `files: Blob[]` (one to four files, at most 10240 KiB each). Use `File` to preserve names; multipart sends actual repeated `files[]` parts, not JSON placeholders.

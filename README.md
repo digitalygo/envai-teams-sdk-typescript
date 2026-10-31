@@ -58,7 +58,7 @@ if (result.terminal.type !== 'turn.completed') {
 
 Provide your own credentials and existing team ID. The constructor reads no environment variables and makes no network calls. A base URL containing only an origin gets `/api/v1`; an explicit path is treated as the complete API prefix. Trailing slashes are removed. Use your deployment’s public API URL and HTTPS in production. HTTP is accepted for local development and is not automatically upgraded to HTTPS.
 
-See [typed quickstart](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/examples/quickstart.ts), [client tools](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/examples/client-tools.ts), and the [durable-store adapter example](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/examples/postgres-tool-store.ts). Examples are typechecked. The PostgreSQL adapter is also exercised with an in-memory SQL test double; tests and CI never connect to a database.
+See [typed quickstart](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/examples/quickstart.ts), [client tools](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/examples/client-tools.ts), and the [durable-store adapter example](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/examples/postgres-tool-store.ts). Examples are typechecked. The supported PostgreSQL adapter is tested with SQL test doubles and disposable PostgreSQL 18 and MySQL 8 services in CI, plus local SQLite. Set ENVAI_TEST_PG_URL to an isolated test database to run database integration tests locally.
 
 ## API and generated types
 
@@ -153,13 +153,13 @@ Unknown tools, invalid arguments, handler errors, empty output, and oversized ou
 
 ### Durable state and reconciliation
 
-`ToolStateStore` is intentionally mandatory. For production side effects, implement atomic, durable `claim`, `get`, and conditional `transition` operations across all application processes. Use a stable, non-secret deployment/account `scope`. The [Postgres adapter example](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/examples/postgres-tool-store.ts) accepts a caller-owned database connection; table creation and credentials are never automatic.
+`ToolStateStore` is intentionally mandatory. For production side effects, implement atomic, durable `claim`, `get`, and conditional `transition` operations across all application processes. Use a stable, non-secret deployment/account `scope`. The [supported PostgresToolStateStore adapter](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/examples/postgres-tool-store.ts) accepts a caller-owned database connection; table creation and credentials are never automatic.
 
 The state machine is `claimed → completed → submitted → resolved`, with `ambiguous` and `abandoned` branches. A matching server result creates a durable resolved tombstone even if its request was never seen. Terminal events create durable per-turn admission barriers, including when signature verification or storage operations are still in flight. Claims precede handler effects; all existing calls are skipped on replay. Store failures fail closed. `get` must return `undefined` only for an absent key; malformed JSON, JSON `null`, invalid shapes/states, mismatched call/turn identities, and invalid saved output must raise an error without overwriting the stored record. The runner validates every record it reads and reports `invalid_tool_state` for corrupt values. Adapters must use `assertToolRecord` and atomically preserve valid identity during mutations. The PostgreSQL example validates the complete row, rejects duplicate-row reads from an incorrectly restored table, and uses a compare-and-swap update, so a concurrent change cannot be overwritten. A failed transition to `completed`, including a missing claim after the handler returns, prevents output submission. Protect database permissions and backups; validation cannot make an attacker-controlled store trustworthy.
 
 Never expire, steal, delete, or re-execute a claim automatically. A crash between an external side effect and saving its result is inherently ambiguous. Reconcile using your own transactional/idempotent downstream operation. Persisted output may contain sensitive information: protect the store appropriately. The SDK never persists API keys, arguments, or signature material in the state store.
 
-There is no automatic tool-output resubmission. A dropped response, `409 tool_already_resolved`, `409 tool_timed_out`, or `404` after turn cleanup is not proof of successful delivery. The record remains ambiguous until the corresponding `agent.tool.result` is observed or your application reconciles it. `drain()` exposes job failures through an `AggregateError`. Feed server result and terminal events to the same runner, even if you do not want to execute requests from that stream. A signature authenticates the call ID, tool name, and canonical arguments. It does not sign the chat, turn, account, timestamp, or freshness. Only feed trusted authenticated stream events to the runner; never treat arbitrary historical requests as fresh work.
+There is no automatic tool-output resubmission. A dropped response, `409 tool_already_resolved`, `409 tool_timed_out`, or `404` after turn cleanup is not proof of successful delivery. The record remains ambiguous until the corresponding `agent.tool.result` is observed or your application reconciles it. `drain()` exposes job failures through an `AggregateError`. Integrated turn and background helpers also observe chat-scoped runner failures and stop waiting promptly on ambiguous tool-output or storage failures; they do not close a caller-owned shared runner. Feed server result and terminal events to the same runner, even if you do not want to execute requests from that stream. A signature authenticates the call ID, tool name, and canonical arguments. It does not sign the chat, turn, account, timestamp, or freshness. Only feed trusted authenticated stream events to the runner; never treat arbitrary historical requests as fresh work.
 
 ## Transport, errors, and observation
 
@@ -184,7 +184,7 @@ The bundled contracts describe API 3.0.0 and negotiated ATP v3. Exact source has
 - Approval resolution currently responds with HTTP 409 and is unavailable as a completed workflow. The primitive preserves that error.
 - Context restore is best-effort. A restore acknowledgement does not guarantee complete or durable history. Reported chat usage can reset and is not a durable billing record.
 - Fork requires a separately created empty destination chat in the same owner/workspace, with both chats idle. Restore returns `turn_id: null` and does not start a turn.
-- Completion pagination omits the `page` request parameter in this contract; empty tool output lacks a schema minimum although the gateway rejects it.
+- Completion pagination exposes a typed positive `page` selector and a bounded iterator; empty tool output lacks a schema minimum although the gateway rejects it.
 
 
 ## Development and provenance
@@ -205,3 +205,5 @@ See [chat attachments](docs/CHAT_ATTACHMENTS.md) for upload, conversion, retry a
 ## Background workflows
 
 See [detached tasks and delegated jobs](docs/BACKGROUND.md) for native deliveries, team delegation, task lookup/cancellation, phase classification, signed task tools, and final job waiting. [The phase example](examples/background.ts) shows runner and cancellation ownership. Foreground turn helpers keep their existing terminal behavior.
+
+Portable JSON/Markdown definitions, reviewed plans, explicit synchronization, durable identity stores, and the `envai-definitions` CLI are documented in [Definitions](docs/DEFINITIONS.md). Definition state supports file, PostgreSQL, SQLite and MySQL with caller-owned connections and explicit migrations. No synchronization runs at import or startup.

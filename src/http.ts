@@ -10,7 +10,7 @@ export function sourceProcessing(value: unknown): SourceProcessing {
 }
 export interface Observation {
   kind: 'request.start' | 'request.end' | 'request.retry' | 'stream.open' | 'stream.close' | 'stream.reconnect' | 'event' | 'tool.start' | 'tool.end';
-  operation?: string; method?: string; status?: number; durationMs?: number; attempt?: number;
+  operation?: string; method?: string; status?: number; requestId?: string; durationMs?: number; attempt?: number;
   eventType?: string; eventId?: string; seq?: number; chatId?: string; turnId?: string | null; callId?: string;
 }
 export interface ClientOptions {
@@ -118,6 +118,10 @@ export class HttpTransport {
       const file = (values.body as { file?: unknown } | undefined)?.file;
       if (!(file instanceof Blob) || file.size > 1_000_000_000) throw new TypeError('Source file must be a Blob of at most 1,000,000,000 bytes');
     }
+    if (operation.id === 'testGenerateImage') {
+      const files = (values.body as { files?: unknown } | undefined)?.files;
+      if (!Array.isArray(files) || files.length < 1 || files.length > 4 || files.some(file => !(file instanceof Blob) || file.size > 10_240 * 1024)) throw new TypeError('Diagnostic images require 1..4 Blob files, each at most 10240 KiB');
+    }
     if (operation.bodyRequired && values.body === undefined) throw new TypeError('Missing request body');
     let url = operation.id === 'getJwks' ? this.jwksUrl : operation.origin ? new URL(path, new URL(this.baseUrl).origin).href : this.baseUrl + path;
     if (query.size) url += (url.includes('?') ? '&' : '?') + query.toString();
@@ -135,6 +139,7 @@ export class HttpTransport {
         for (const [key, value] of Object.entries(values.body as object)) {
           if (operation.id === 'uploadWikiSource' && key === 'processing' && sourceMode === 'convert') continue;
           if (value instanceof Blob) data.append(key, value);
+          else if (Array.isArray(value) && value.length > 0 && value.every(item => item instanceof Blob)) for (const file of value) data.append(key + '[]', file);
           else if (value !== undefined && value !== null) data.append(key, typeof value === 'string' ? value : JSON.stringify(value));
         }
         headers.delete('content-type'); body = data;
@@ -195,7 +200,7 @@ export class HttpTransport {
         await delay(wait, options.signal);
       } finally {
         clearTimeout(timer);
-        this.observe({ kind: 'request.end', operation: operation.id, method: operation.method, status: response?.status, durationMs: Date.now() - start, attempt });
+        this.observe({ kind: 'request.end', operation: operation.id, method: operation.method, status: response?.status, requestId: response?.headers.get('x-request-id') ?? undefined, durationMs: Date.now() - start, attempt });
       }
     }
   }

@@ -126,6 +126,8 @@ function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
 export class ClientToolRunner {
   readonly #options: ToolRunnerOptions; readonly #concurrency: number; readonly #maxPending: number;
   readonly #jobs = new Map<string, Job>(); readonly #queue: Job[] = []; readonly #tasks = new Set<Promise<void>>(); readonly #errors: unknown[] = [];
+  readonly #failureListeners = new Set<{chatId:string;listener:(error:unknown)=>void}>();
+  readonly #jobErrors: {chatId:string;error:unknown}[] = [];
   readonly #abort = new AbortController(); #admitting = 0;
   readonly #endingTurns = new Set<string>(); readonly #resolvingCalls = new Set<string>();
   constructor(options: ToolRunnerOptions) {
@@ -225,7 +227,7 @@ export class ClientToolRunner {
   private pump(): void {
     while (this.#tasks.size < this.#concurrency && this.#queue.length) {
       const job = this.#queue.shift()!;
-      const task = this.execute(job).catch(error => { this.#errors.push(error); }).finally(() => { this.#tasks.delete(task); this.#jobs.delete(job.key); this.pump(); });
+      const task = this.execute(job).catch(error => { this.#errors.push(error); this.#jobErrors.push({chatId:job.event.chat_id,error}); for(const subscription of this.#failureListeners) if(subscription.chatId===job.event.chat_id) { try { subscription.listener(error); } catch { /* observers cannot mask failure */ } } }).finally(() => { this.#tasks.delete(task); this.#jobs.delete(job.key); this.pump(); });
       this.#tasks.add(task);
     }
   }
@@ -279,10 +281,16 @@ export class ClientToolRunner {
       this.observe({ kind: 'tool.end', chatId: event.chat_id, turnId: event.turn_id, callId: event.data.call_id });
     }
   }
+  /** Observe delivery/storage failures for a chat without consuming errors or taking ownership of the runner. */
+  onFailure(chatId: string, listener: (error: unknown) => void): () => void {
+    const subscription={chatId,listener}; this.#failureListeners.add(subscription);
+    for(const failure of this.#jobErrors) if(failure.chatId===chatId) { try { listener(failure.error); } catch { /* observers cannot mask failure */ } }
+    return () => { this.#failureListeners.delete(subscription); };
+  }
   /** Wait for admitted jobs; errors include ambiguous submission outcomes. A noncooperative handler can keep a slot occupied. */
   async drain(signal?: AbortSignal): Promise<void> {
     while (this.#tasks.size || this.#queue.length) await (signal ? abortable(Promise.all([...this.#tasks]), signal) : Promise.all([...this.#tasks]));
-    if (this.#errors.length) throw new AggregateError(this.#errors.splice(0), 'Client tool jobs failed; inspect durable state before reconciliation');
+    if (this.#errors.length) { this.#jobErrors.length=0; throw new AggregateError(this.#errors.splice(0), 'Client tool jobs failed; inspect durable state before reconciliation'); }
   }
   close(): void { this.#abort.abort(new DOMException('Tool runner closed', 'AbortError')); }
   async run(events: AsyncIterable<ATPEvent>): Promise<void> { try { for await (const event of events) await this.accept(event); await this.drain(this.#options.signal); } finally { this.close(); } }

@@ -205,7 +205,7 @@ test('truncated finite legacy SSE tail is an atomic protocol error',async()=>{
 });
 test('shared schemas match the verified backend Git tree byte-for-byte',async()=>{
  const {createHash}=await import('node:crypto');const manifest=JSON.parse(readFileSync(new URL('../contracts/manifest.json',import.meta.url),'utf8'));
- assert.equal(manifest.commit,'20dfd5a6c8ec9e75d3754875d4f94520feb3bbf6');assert.equal(manifest.operationCount,76);assert.equal(manifest.atpVersion,3);
+ assert.equal(manifest.commit,'3a9ecf3a4ccd3291474848d3dc9d0100170b9e54');assert.equal(manifest.operationCount,76);assert.equal(manifest.atpVersion,3);
  assert.equal(manifest.sha256['events-v2.json'],'88d41835f88c0cc4ad071b06ed4623882c6b64144baf312c4a095504c98cd7d6');
  assert.equal(createHash('sha256').update(readFileSync(new URL('../contracts/openapi-v2.json',import.meta.url))).digest('hex'),'bbe7fcc23415e25012fdb88f1931fd8d12a96f7884de8d58c875459a557c5155');
  assert.deepEqual(Object.keys(manifest.sources).sort(),['events-v2.json','events.json','openapi.yaml','smidja-native.json','terminal-snapshot.json','wiki.json']);

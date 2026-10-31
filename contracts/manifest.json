@@ -1,6 +1,6 @@
 {
   "repository": "digitalygo/envai-teams",
-  "commit": "20dfd5a6c8ec9e75d3754875d4f94520feb3bbf6",
+  "commit": "3a9ecf3a4ccd3291474848d3dc9d0100170b9e54",
   "apiVersion": "3.0.0",
   "atpVersion": 3,
   "operationCount": 76,
@@ -13,9 +13,9 @@
     },
     "openapi.yaml": {
       "repository_path": "packages/contracts/openapi.yaml",
-      "bytes": 257539,
-      "sha256": "f8b8e3936643fc8ce7b3f8d47a988149e3063f1afd3587830df30c6f1d4ba09f",
-      "git_blob_sha": "43364937f4acc996cbf6a6ea454bf1e4e924bb1b"
+      "bytes": 257785,
+      "sha256": "d7c256774b00d2149b4ab5fbfc6388787cb46d4a41e2795622880372ec343668",
+      "git_blob_sha": "7bf1bb0cf218e9c8765da15e8ddfd9f090e2fa93"
     },
     "events.json": {
       "repository_path": "packages/contracts/events.json",
@@ -47,8 +47,8 @@
       "snapshot_path": "contracts/openapi.json",
       "source_repository_path": "packages/contracts/openapi.yaml",
       "origin": "Generated JSON representation of the pinned OpenAPI YAML; not an upstream repository file.",
-      "bytes": 342051,
-      "sha256": "a2abd932d49c8530b20095d786994f791bc6c1a9b7c9cf718c23419b1ffe3fb8"
+      "bytes": 342400,
+      "sha256": "3a0b2cfc75c4b1d240514396032f615642d7c4ee04162ecf8bab67f55dfef0a2"
     }
   },
   "shared_fixtures": {
@@ -78,7 +78,7 @@
     }
   },
   "sha256": {
-    "openapi.yaml": "f8b8e3936643fc8ce7b3f8d47a988149e3063f1afd3587830df30c6f1d4ba09f",
+    "openapi.yaml": "d7c256774b00d2149b4ab5fbfc6388787cb46d4a41e2795622880372ec343668",
     "events.json": "ea5e00c19d5a8cc2d0782530344595943fcd8d9ce572529bbc178d95765d9835",
     "events-v2.json": "88d41835f88c0cc4ad071b06ed4623882c6b64144baf312c4a095504c98cd7d6",
     "wiki.json": "e360060a42c1d69a6cd15de3ea33745567d23166785efcb08f161c7acb38d30c",

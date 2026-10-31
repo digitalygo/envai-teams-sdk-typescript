@@ -15,7 +15,16 @@ function type(s={},context='http'){
  if(s.$ref){const n=refName(s.$ref);return s.$ref.includes('$defs')?(context==='legacy-event'?'Legacy':'')+eventName(n):n;}
  if(Object.hasOwn(s,'const'))return json(s.const);
  if(s.enum)return s.enum.map(json).join(' | ');
- if(s.oneOf||s.anyOf)return '('+(s.oneOf||s.anyOf).map(x=>type(x,context)).join(' | ')+')';
+ if(s.oneOf||s.anyOf){
+  const alternatives=(s.oneOf||s.anyOf).map(branch=>{
+   // JSON Schema alternatives inherit sibling properties. A required-only branch
+   // still narrows those properties; dropping them turns update bodies into unknown.
+   if(s.properties&&branch.required)branch={...branch,additionalProperties:branch.additionalProperties??false,properties:{...Object.fromEntries(branch.required.map(name=>[name,s.properties[name]??{}])),...branch.properties}};
+   return type(branch,context);
+  });
+  const union='('+alternatives.join(' | ')+')';
+  return s.properties?'('+type({...s,oneOf:undefined,anyOf:undefined},context)+' & '+union+')':union;
+ }
  if(s.allOf){const parts=[type({...s,allOf:undefined},context),...s.allOf.map(x=>type(x,context))].filter(x=>x!=='unknown');return parts.length?'('+parts.join(' & ')+')':'unknown';}
  if(Array.isArray(s.type))return s.type.map(t=>type({...s,type:t},context)).join(' | ');
  if(s.format==='binary')return 'Blob';
@@ -70,5 +79,5 @@ const sourceMetadata=Object.fromEntries(sourceNames.map(name=>{const bytes=readF
 const derivedApiBytes=Buffer.from(json(spec,null,2)+'\n');
 const derivedArtifacts={'openapi.json':{snapshot_path:'contracts/openapi.json',source_repository_path:'packages/contracts/openapi.yaml',origin:'Generated JSON representation of the pinned OpenAPI YAML; not an upstream repository file.',bytes:derivedApiBytes.length,sha256:createHash('sha256').update(derivedApiBytes).digest('hex')}};
 const attachmentFixtures=Object.fromEntries(['failed.json','pending.json','ready.json','recoverable.json'].map(name=>[name,{snapshot_path:'testdata/chat-attachments/'+name,repository_path:'packages/contracts/fixtures/chat-attachments/'+name,origin:'Shared synthetic conformance fixture copied from the pinned server commit; not captured provider traffic.',sha256:createHash('sha256').update(readFileSync('testdata/chat-attachments/'+name)).digest('hex')}]));
-write('contracts/manifest.json',json({repository:'digitalygo/envai-teams',commit:'20dfd5a6c8ec9e75d3754875d4f94520feb3bbf6',apiVersion:spec.info.version,atpVersion:3,operationCount:entries.length,sources:sourceMetadata,derived_artifacts:derivedArtifacts,shared_fixtures:attachmentFixtures,sha256:Object.fromEntries(['openapi.yaml','events.json','events-v2.json','wiki.json','terminal-snapshot.json'].map(n=>[n,createHash('sha256').update(readFileSync('contracts/'+n)).digest('hex')]))},null,2)+'\n');
+write('contracts/manifest.json',json({repository:'digitalygo/envai-teams',commit:'3a9ecf3a4ccd3291474848d3dc9d0100170b9e54',apiVersion:spec.info.version,atpVersion:3,operationCount:entries.length,sources:sourceMetadata,derived_artifacts:derivedArtifacts,shared_fixtures:attachmentFixtures,sha256:Object.fromEntries(['openapi.yaml','events.json','events-v2.json','wiki.json','terminal-snapshot.json'].map(n=>[n,createHash('sha256').update(readFileSync('contracts/'+n)).digest('hex')]))},null,2)+'\n');
 console.log(`${check?'Checked':'Generated'} ${entries.length} operations, ${Object.keys(spec.components.schemas).length} HTTP models, ${types.length} event types.`);

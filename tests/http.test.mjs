@@ -11,6 +11,7 @@ for(const item of fixture('operations.json'))test(`inventory and wire: ${item.id
  const params=Object.fromEntries(operation.parameters.filter(p=>p.required).map(p=>[p.name,p.in==='query'?'value':p.name==='name'?'a/b':'id']));
  if(operation.bodyRequired)params.body=operation.bodyMime==='multipart/form-data'?{file:new Blob(['input'],{type:'image/png'})}:{name:'example'};
 
+ if(item.id==='testGenerateImage')params.body={files:[new Blob(['image'],{type:'image/png'})],prompt:'diagnostic',model_code:'model'};
  const result=await client[item.id](params);
  assert.equal(seen.init.method,item.method);assert.equal(seen.init.redirect,'manual');assert.equal(seen.init.headers.get('authorization'),item.authenticated?'Bearer secret-key':null);
  const parsed=new URL(seen.url);assert.equal(parsed.origin,'https://example.test');

@@ -599,6 +599,11 @@ export const operations = {
         "required": false
       },
       {
+        "name": "page",
+        "in": "query",
+        "required": false
+      },
+      {
         "name": "per_page",
         "in": "query",
         "required": false
