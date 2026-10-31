@@ -97,7 +97,7 @@ export class HttpTransport {
     // Neither a hook nor per-call headers may overwrite credentials or smuggle an alternative host.
     if (headers.has('authorization') || headers.has('host') || headers.has('x-envai-contract-version') || headers.has('x-envai-extensions')) throw new TypeError('Reserved request header');
     for (const p of operation.id === 'downloadArtifact' ? [...operation.parameters].sort((a, b) => a.name.localeCompare(b.name)) : operation.parameters) {
-      const v = p.in === 'header' ? (p.name === 'Idempotency-Key' ? values.idempotencyKey ?? headers.get(p.name) : p.name === 'X-Envai-Contract-Version' ? this.contractVersion : headers.get(p.name)) : values[p.name];
+      const v = p.in === 'header' ? (p.name === 'Idempotency-Key' ? values.idempotencyKey ?? headers.get(p.name) : p.name === 'X-Envai-Contract-Version' ? this.contractVersion : p.name === 'X-Envai-Extensions' ? (this.nativeTasks ? 'native-tasks-v1' : undefined) : headers.get(p.name)) : values[p.name];
       if (p.required && (v === undefined || v === null || v === '')) throw new TypeError(`Missing ${p.name}`);
       if (v === undefined || v === null) continue;
       if (p.in === 'header') {
@@ -145,6 +145,7 @@ export class HttpTransport {
     if (negotiated && (operation.method !== 'GET' || backgroundFeature)) {
       const capabilities = await this.negotiate(options);
       const required = [backgroundFeature];
+      if (this.nativeTasks && atp) required.push('detached_background');
       const request = values.body as { strict_model?: boolean; notify_origin?: boolean } | undefined;
       if (request?.strict_model === true) required.push('strict_model');
       if (operation.id === 'delegateToTeam' && request?.notify_origin === false) required.push('delegation_notify_origin');

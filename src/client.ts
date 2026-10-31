@@ -61,7 +61,7 @@ export class EnvaiClient extends GeneratedClient {
           replayBytes += Buffer.byteLength(JSON.stringify(next.value));
           if (replayBytes > 16 * 1024 * 1024) throw new ProtocolError('Idempotent send replay exceeds 16 MiB; resume the known turn using its cursor');
           replay.push(next.value);
-        } else if (options.toolRunner && !isEvent(next.value, 'agent.tool.request')) await options.toolRunner.accept(next.value);
+        } else if (options.toolRunner && !isToolRequest(next.value)) await options.toolRunner.accept(next.value);
       }
       clearTimeout(timer); timer = undefined;
       const accepted = await this.sendChatMessage({ chat_id: chatId, body: message, idempotencyKey: options.idempotencyKey }, { signal, headers: options.headers });

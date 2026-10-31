@@ -127,3 +127,17 @@ test('shared caller signal cancels admitted task handler when delegated waiting 
 test('cancellation responses preserve explicit cancelled state and reject malformed receipts',async()=>{
  for(const response of [null,[],{}, {task_id:'task',status:'completed',subtree:false},{task_id:'',status:'cancelled',subtree:false},{task_id:'task',status:'cancelled',subtree:'false'},{task_id:'task',status:'cancelled',subtree:false,extra:true}])await assert.rejects(clientWith(()=>json(response)).cancelDetachedTask({chat_id:chatId,task_id:'task',body:{}}),ProtocolError);
 });
+
+test('native message admission requires the negotiated detached capability before POST',async()=>{
+ await assert.rejects(clientWith(()=>{throw Error('must not post');},[]).sendChatMessage({chat_id:chatId,body:{message:'background work'}}),CompatibilityError);
+});
+
+test('foreground send helper never dispatches replayed detached requests before readiness',async()=>{
+ const r=runner(()=>{throw Error('replayed task must not execute');});
+ let controller;const emit=e=>controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(e)}\n\n`));
+ const c=clientWith(async(url)=>{
+  if(url.includes('/events'))return new Response(new ReadableStream({start(c){controller=c;emit(wrapper());emit(event('ping',0));}}),{headers:{'content-type':'text/event-stream','X-Envai-Contract-Version':'3'}});
+  emit(event('turn.completed',2));return json({status:'accepted',turn_id:turnId});
+ });
+ await c.sendAndWait(chatId,{message:'hello'},{toolRunner:r.instance});await r.instance.drain();assert.equal(r.posts.length,0);
+});
