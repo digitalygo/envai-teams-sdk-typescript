@@ -1,11 +1,11 @@
 # Envai Teams TypeScript SDK
 
-A Node.js 22+ ESM client for the current Envai Teams **alpha** API. It includes typed primitives for all **76 HTTP operations**, all **36 ATP event types**, async SSE streams, turn helpers, and opt-in signed client tools.
+A Node.js 22+ ESM client for the current Envai Teams **alpha** API. It includes typed primitives for all **78 HTTP operations**, all **36 ATP event types**, async SSE streams, turn helpers, and opt-in signed client tools.
 
 **Status:** alpha prerelease available as a [GitHub release archive](https://github.com/digitalygo/envai-teams-sdk-typescript/releases/tag/v1.0.0-alpha.1). The package is not currently published to the npm registry. Prerelease APIs may change; review upgrades deliberately. API compatibility limits are described below.
 
 - [Installation and configuration](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/getting-started.md)
-- [API and models](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-reference.md) · [all 76 operations](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-inventory.md)
+- [API and models](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-reference.md) · [all 78 operations](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-inventory.md)
 - [Streaming and recovery](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/streaming.md)
 - [Client-tool safety and deployment](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/client-tools.md)
 
@@ -191,7 +191,7 @@ The bundled contracts describe API 3.0.0 and negotiated ATP v3. Exact source has
 
 `npm run generate` deterministically regenerates 123 HTTP models, request/response types, operation primitives, and 36 event payload types from both pinned contracts. SSE, cryptography, tools, and helpers remain handwritten. `npm run check:generated` fails on drift without rewriting files. The original v2 snapshots retain provenance in `testdata/contracts/provenance.json`; current shared v3/wiki sources are identified in `contracts/manifest.json`. `sources` preserves their original commit/path, byte count, SHA-256 and Git blob SHA. `generated_fixtures` separately identifies SDK-authored conformance cases and generated OpenAPI JSON. Public guides are SDK documentation, not copied contract sources. Tests verify every retained source and fixture hash.
 
-Tests make no live Envai requests and need no credentials. CI typechecks the runtime and examples, verifies generation, tests all 76 operations plus schema/SSE/signature/state-machine conformance, enforces at least 95% line/function and 90% branch coverage, and smoke-tests the packed archive on Node 22 and 24. Signature fixtures use public RFC 8032 test-key material only, never account credentials or production signing keys.
+Tests make no live Envai requests and need no credentials. CI typechecks the runtime and examples, verifies generation, tests all 78 operations plus schema/SSE/signature/state-machine conformance, enforces at least 95% line/function and 90% branch coverage, and smoke-tests the packed archive on Node 22 and 24. Signature fixtures use public RFC 8032 test-key material only, never account credentials or production signing keys.
 
 MIT, copyright 2026 DigItalyGo. Existing license text is preserved.
 
@@ -209,3 +209,23 @@ See [detached tasks and delegated jobs](docs/BACKGROUND.md) for native deliverie
 Portable JSON/Markdown definitions, reviewed plans, explicit synchronization, durable identity stores, and the `envai-definitions` CLI are documented in [Definitions](docs/DEFINITIONS.md). Definition state supports file, PostgreSQL, SQLite and MySQL with caller-owned connections and explicit migrations. No synchronization runs at import or startup.
 
 Set `strictValidation: true` on `EnvaiClient` to validate every canonical HTTP operation's body/path/query before sending and every successful JSON response envelope before unwrapping. This includes ordinary CRUD, required fields, enum/type/length constraints, schema composition and the canonical additional-field policy. The default remains `false` for compatibility with historical callers; native/wiki/attachment/completion validators still run by default. Binary multipart slots validate actual `Blob` values; SSE/binary responses retain their dedicated handling. Errors are `ProtocolError`, and malformed strict requests make no HTTP calls.
+
+### Independent jobs and finite choices
+
+The native surface is pinned to Envai commit `18ce9124604874d8d4bac784b521171d2ff9e064`. Native extensions remain opt-in and default to disabled. Capability discovery is read-only; admission requires `independent_jobs`, choice classification requires `finite_choice_classification`, and delivery without an origin requires `originless_deliveries`. Explicit `strict_model: true` also requires `strict_model`.
+
+Independent jobs start without a parent turn. Their receipt identifies the initial coordinator; final task `output` and `result_turn_id` identify the completed job. Task snapshots keep the required `origin_turn_id` key with the empty string for independent jobs. Missing origin is invalid. Keep the execution chat’s native SSE subscription and client-tool runner alive while waiting; polling helpers do not execute tools.
+
+Finite-choice requests provide a full non-null JSON context, question, stable request ID and 2–32 exact labels with descriptions. The SDK rejects duplicate or invalid labels and verifies the returned label, request ID, model and invocation ID. An invented label is a protocol error. Classification admission is durable and a duplicate returns 409; uncertain outcomes are never automatically resubmitted. Job and delivery deduplication is only resident: after restart, 404 means unknown, not permission to repeat paid work.
+
+```ts
+const client = new EnvaiClient({ baseUrl, apiKey, nativeTasks: true });
+const receipt = await client.chats.startJob({ chat_id: chatId, body: {
+  workspace_id: workspaceId, request_id: requestId, prompt: "Review the supplied changes", strict_model: true
+}});
+const result = await client.waitForIndependentJob(chatId, receipt.task_id);
+const selected = await client.chats.classifyChoice({ chat_id: chatId, body: {
+  request_id: classificationId, context: { output: result.output }, question: "Can this phase continue?",
+  choices: [{ label: "CONTINUE", description: "No clarification required" }, { label: "ASK", description: "Owner input required" }]
+}});
+```

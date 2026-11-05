@@ -49,7 +49,7 @@ function assertLegacyUsageCosts(value: unknown): void {
 
 export function validateContractValue<T>(name: string, value: unknown, version: ContractVersion = 3): T {
   if (version !== 2 && version !== 3) throw new CompatibilityError('Unsupported selected contract version');
-  const root = ['Completion', 'CompletionCollection', 'ChatAttachment', 'ChatAttachmentCollection', 'AttachmentManifest', 'ChatMessageAccepted', 'NativeDeliveryReceipt', 'TeamDelegationReceipt', 'DetachedTaskSnapshot', 'PhaseClassificationResult', 'NativeDeliveryRequest', 'TeamDelegationRequest', 'PhaseClassificationRequest'].includes(name) ? `urn:envai:http:v${version}#/components/schemas/` : 'urn:envai:wiki#/$defs/';
+  const root = ['Completion', 'CompletionCollection', 'ChatAttachment', 'ChatAttachmentCollection', 'AttachmentManifest', 'ChatMessageAccepted', 'NativeDeliveryReceipt', 'TeamDelegationReceipt', 'DetachedTaskSnapshot', 'PhaseClassificationResult', 'NativeDeliveryRequest', 'TeamDelegationRequest', 'PhaseClassificationRequest', 'ChoiceClassificationRequest', 'ChoiceClassificationResult', 'IndependentJobRequest', 'IndependentJobReceipt'].includes(name) ? `urn:envai:http:v${version}#/components/schemas/` : 'urn:envai:wiki#/$defs/';
   const ref = root + name;
   let validate = validators.get(ref);
   if (!validate) { validate = ajv.compile({ $ref: ref }); validators.set(ref, validate); }
@@ -64,7 +64,7 @@ export function validateContractValue<T>(name: string, value: unknown, version: 
 }
 const responseSchemas: Record<string, string> = {
   sendChatMessage: 'ChatMessageAccepted',
-  deliverWorkflowResult: 'NativeDeliveryReceipt', delegateToTeam: 'TeamDelegationReceipt', getDetachedTask: 'DetachedTaskSnapshot', classifyPhase: 'PhaseClassificationResult',
+  deliverWorkflowResult: 'NativeDeliveryReceipt', delegateToTeam: 'TeamDelegationReceipt', getDetachedTask: 'DetachedTaskSnapshot', classifyPhase: 'PhaseClassificationResult', classifyChoice: 'ChoiceClassificationResult', startIndependentJob: 'IndependentJobReceipt',
   uploadChatAttachment: 'ChatAttachment', getChatAttachment: 'ChatAttachment', retryChatAttachment: 'ChatAttachment', deleteChatAttachment: 'ChatAttachment',
   uploadWikiSource: 'WikiSource', getWikiSource: 'WikiSource', withdrawWikiSource: 'WikiSource',
   createWikiInboxRun: 'WikiOperation', createWikiOutboxRun: 'WikiOperation', createWikiSyncRun: 'WikiOperation', getWikiOperation: 'WikiOperation',
@@ -88,7 +88,7 @@ export function validateResponse(id: string, value: unknown, version: ContractVe
 }
 
 export function validateBackgroundRequest(id: string, value: unknown): void {
-  const name = ({ deliverWorkflowResult: 'NativeDeliveryRequest', delegateToTeam: 'TeamDelegationRequest', classifyPhase: 'PhaseClassificationRequest' } as Record<string, string>)[id];
+  const name = ({ deliverWorkflowResult: 'NativeDeliveryRequest', delegateToTeam: 'TeamDelegationRequest', classifyPhase: 'PhaseClassificationRequest', classifyChoice: 'ChoiceClassificationRequest', startIndependentJob: 'IndependentJobRequest' } as Record<string, string>)[id];
   if (name) validateContractValue(name, value);
   if (id === 'classifyPhase' && (value as { task_context: unknown }).task_context === null) throw new ProtocolError('task_context must be non-null JSON');
   if (id === 'cancelDetachedTask' && (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(k => k !== 'subtree') || ('subtree' in value && typeof value.subtree !== 'boolean'))) throw new ProtocolError('Invalid task cancellation body');

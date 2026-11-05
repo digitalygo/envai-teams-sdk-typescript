@@ -1,3 +1,5 @@
+import { validateChoiceRequest, validateNativeCorrelation } from './native-contract.js';
+import type { ChoiceClassificationRequest } from './generated.js';
 import { CompatibilityError, hasCapabilityFeature, validateBackgroundRequest, validateResponse, validateHttpRequest, validateHttpResponse, type ContractVersion } from './contract.js';
 import { apiError, EnvaiError, ProtocolError, TransportError } from './errors.js';
 export type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -86,13 +88,14 @@ export class HttpTransport {
     const values = params as Record<string, unknown>;
     if(this.strictValidation) validateHttpRequest(operation.id, values, this.contractVersion);
     validateBackgroundRequest(operation.id, values.body);
+    if (operation.id === "classifyChoice") validateChoiceRequest(values.body as ChoiceClassificationRequest);
     const sourceMode = operation.id === 'uploadWikiSource' ? sourceProcessing((values.body as { processing?: unknown } | undefined)?.processing) : undefined;
     let path = operation.path;
     if (operation.id.endsWith('Legacy') && this.contractVersion !== 2) throw new CompatibilityError('Legacy operations require contractVersion: 2');
     const atp = path.startsWith('/chats/') || path.startsWith('/atp/v3/') || path === '/capabilities';
     const wiki = !operation.public && /\/(wiki|files\/sources)(\/|$)/.test(path);
     const attachment = /\/chats\/[^/]+\/attachments(\/|$)/.test(path);
-    const backgroundFeature = ({ deliverWorkflowResult: 'native_deliveries', delegateToTeam: 'cross_team_delegation', getDetachedTask: 'detached_background', cancelDetachedTask: 'detached_background', classifyPhase: 'phase_classification' } as Record<string, string>)[operation.id];
+    const backgroundFeature = ({ deliverWorkflowResult: 'native_deliveries', delegateToTeam: 'cross_team_delegation', getDetachedTask: 'detached_background', cancelDetachedTask: 'detached_background', classifyPhase: 'phase_classification', classifyChoice: 'finite_choice_classification', startIndependentJob: 'independent_jobs' } as Record<string, string>)[operation.id];
     if (!this.nativeTasks && (backgroundFeature || (values.body as { strict_model?: unknown } | undefined)?.strict_model === true)) throw new CompatibilityError('Create the client with nativeTasks: true to opt in to native-tasks-v1');
     const negotiated = atp || wiki || attachment || /\/completions(\/|$)/.test(path);
     if (this.contractVersion === 2 && (wiki || attachment || operation.method !== 'GET')) throw new CompatibilityError('Contract 2 is historical read-only; wiki requires contract 3');
@@ -152,11 +155,14 @@ export class HttpTransport {
     }
     const attachmentIds = operation.id === 'sendChatMessage' ? (values.body as { attachment_ids?: string[] } | undefined)?.attachment_ids ?? [] : [];
     if (attachmentIds.length && !headers.has('Idempotency-Key')) throw new TypeError('Attachment messages require Idempotency-Key');
+    let independentJobs = false;
     if (negotiated && (operation.method !== 'GET' || backgroundFeature)) {
       const capabilities = await this.negotiate(options);
+      independentJobs = hasCapabilityFeature(capabilities.features, "independent_jobs");
       const required = [backgroundFeature];
       if (this.nativeTasks && atp) required.push('detached_background');
-      const request = values.body as { strict_model?: boolean; notify_origin?: boolean } | undefined;
+      const request = values.body as { strict_model?: boolean; notify_origin?: boolean; origin_turn_id?: string } | undefined;
+      if (operation.id === 'deliverWorkflowResult' && !request?.origin_turn_id) required.push('originless_deliveries');
       if (request?.strict_model === true) required.push('strict_model');
       if (operation.id === 'delegateToTeam' && request?.notify_origin === false) required.push('delegation_notify_origin');
       for (const feature of required) if (feature && !hasCapabilityFeature(capabilities.features, feature)) throw new CompatibilityError(`Server does not advertise ${feature}`);
@@ -194,7 +200,9 @@ export class HttpTransport {
           return validateResponse(operation.id, (data as { data: T }).data, this.contractVersion) as T;
         }
         if (attachmentIds.length && JSON.stringify((data as { attachment_ids?: string[] }).attachment_ids) !== JSON.stringify(attachmentIds)) throw new ProtocolError('Message acceptance omitted or changed attachment IDs', data);
-        return validateResponse(operation.id, data, this.contractVersion) as T;
+        const validated = validateResponse(operation.id, data, this.contractVersion);
+        validateNativeCorrelation(operation.id, validated, values, independentJobs);
+        return validated as T;
       } catch (error) {
         options.signal?.throwIfAborted();
         if (controller.signal.aborted) throw controller.signal.reason;

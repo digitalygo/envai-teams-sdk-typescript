@@ -1,21 +1,21 @@
 {
   "repository": "digitalygo/envai-teams",
-  "commit": "3a9ecf3a4ccd3291474848d3dc9d0100170b9e54",
+  "commit": "18ce9124604874d8d4bac784b521171d2ff9e064",
   "apiVersion": "3.0.0",
   "atpVersion": 3,
-  "operationCount": 76,
+  "operationCount": 78,
   "sources": {
     "smidja-native.json": {
       "repository_path": "packages/contracts/smidja-native.json",
-      "bytes": 11008,
-      "sha256": "daebc8ee18fe74ac6c536bef2f2a7b520260c9f7d80cf5a814d99ba8659efe7d",
-      "git_blob_sha": "22719db4614c5bdfc054bad1a31113061ca0a68b"
+      "bytes": 13630,
+      "sha256": "8393b2522f854b68c1c536c6913e8719f85f15a7b1c2128fc55a30e9d4685bc4",
+      "git_blob_sha": "7577f17a4beaaaf821d653fd355b18fb1e1765ca"
     },
     "openapi.yaml": {
       "repository_path": "packages/contracts/openapi.yaml",
-      "bytes": 257785,
-      "sha256": "d7c256774b00d2149b4ab5fbfc6388787cb46d4a41e2795622880372ec343668",
-      "git_blob_sha": "7bf1bb0cf218e9c8765da15e8ddfd9f090e2fa93"
+      "bytes": 266248,
+      "sha256": "a3fae2bc6faef4c9132ad792a4a13d1aa4c426d5db8e7619cf98f10ebe6a57e7",
+      "git_blob_sha": "e835fc0d406a78cdc9a203bc9f13090a671fbc55"
     },
     "events.json": {
       "repository_path": "packages/contracts/events.json",
@@ -47,8 +47,8 @@
       "snapshot_path": "contracts/openapi.json",
       "source_repository_path": "packages/contracts/openapi.yaml",
       "origin": "Generated JSON representation of the pinned OpenAPI YAML; not an upstream repository file.",
-      "bytes": 342400,
-      "sha256": "3a0b2cfc75c4b1d240514396032f615642d7c4ee04162ecf8bab67f55dfef0a2"
+      "bytes": 354017,
+      "sha256": "6fa287696314ea6d3fcd953dfcb0aa113fb0822ed2355639e5fe697129309e2e"
     }
   },
   "shared_fixtures": {
@@ -78,7 +78,7 @@
     }
   },
   "sha256": {
-    "openapi.yaml": "d7c256774b00d2149b4ab5fbfc6388787cb46d4a41e2795622880372ec343668",
+    "openapi.yaml": "a3fae2bc6faef4c9132ad792a4a13d1aa4c426d5db8e7619cf98f10ebe6a57e7",
     "events.json": "ea5e00c19d5a8cc2d0782530344595943fcd8d9ce572529bbc178d95765d9835",
     "events-v2.json": "88d41835f88c0cc4ad071b06ed4623882c6b64144baf312c4a095504c98cd7d6",
     "wiki.json": "e360060a42c1d69a6cd15de3ea33745567d23166785efcb08f161c7acb38d30c",

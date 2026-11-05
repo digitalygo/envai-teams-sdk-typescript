@@ -125,6 +125,52 @@ export const operations = {
     "mode": "json",
     "unwrap": false
   },
+  "classifyChoice": {
+    "id": "classifyChoice",
+    "method": "POST",
+    "path": "/atp/v3/chats/{chat_id}/classify-choice",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "chat_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      }
+    ],
+    "bodyMime": "application/json",
+    "bodyRequired": true,
+    "mode": "json",
+    "unwrap": false
+  },
+  "startIndependentJob": {
+    "id": "startIndependentJob",
+    "method": "POST",
+    "path": "/atp/v3/chats/{chat_id}/jobs",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "chat_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Contract-Version",
+        "in": "header",
+        "required": true
+      }
+    ],
+    "bodyMime": "application/json",
+    "bodyRequired": true,
+    "mode": "json",
+    "unwrap": false
+  },
   "sendChatMessage": {
     "id": "sendChatMessage",
     "method": "POST",

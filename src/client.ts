@@ -172,6 +172,22 @@ export class EnvaiClient extends GeneratedClient {
   async waitForDelegatedJob(chatId: string, receipt: TeamDelegationReceipt, options: BackgroundOptions = {}): Promise<DetachedTaskSnapshot> {
     return this.withTargetStream(receipt.target_chat_id, options, async (signal, replay) => { await replay(); return this.pollDelegatedJob(chatId, receipt, { ...options, signal }); });
   }
+  async waitForIndependentJob(chatId: string, taskId: string, options: BackgroundOptions = {}): Promise<DetachedTaskSnapshot> {
+    if (!this.transport.nativeTasks) throw new CompatibilityError('Independent jobs require nativeTasks: true');
+    const controller = new AbortController();
+    const signal = options.signal ? AbortSignal.any([controller.signal,options.signal]) : controller.signal;
+    const timer = setTimeout(()=>controller.abort(new DOMException('Job outcome remains unknown', 'TimeoutError')), positive(options.timeoutMs ?? 120_000, 'timeoutMs'));
+    try {
+      const capabilities = await this.transport.negotiate({...options,signal});
+      if (!hasCapabilityFeature(capabilities.features,'independent_jobs')) throw new CompatibilityError('Server does not advertise independent_jobs');
+      for (;;) {
+        const task = await this.getDetachedTask({chat_id:chatId,task_id:taskId},{...options,signal});
+        if (task.origin_turn_id!=='' || task.target_chat_id!==chatId) throw new ProtocolError('Independent job snapshot changed execution identity');
+        if (task.status!=='running') return task;
+        await delay(positive(options.pollIntervalMs ?? 1000,'pollIntervalMs'),signal);
+      }
+    } finally { clearTimeout(timer); }
+  }
   private async pollDelegatedJob(chatId: string, receipt: TeamDelegationReceipt, options: BackgroundOptions, originTurnId?: string): Promise<DetachedTaskSnapshot> {
     for (;;) {
       const task = await this.getDetachedTask({ chat_id: chatId, task_id: receipt.task_id }, options);

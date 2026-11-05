@@ -2,11 +2,15 @@
 import { HttpTransport, type RequestOptions } from "./http.js";
 import { operations } from "./operations.js";
 import type { AtpUsage } from "./event-types.js";
-export type NativeDeliveryRequest = { "workspace_id": string; "event_id": string; "origin_turn_id": string; "task_id": string; "output": string; "status": "completed" | "blocked" | "failed" | "cancelled" };
+export type NativeDeliveryRequest = { "strict_model"?: boolean; "workspace_id": string; "event_id": string; "origin_turn_id"?: string; "task_id": string; "output": string; "status": "completed" | "blocked" | "failed" | "cancelled" };
 export type NativeDeliveryReceipt = { "event_id": string; "status": "queued" | "delivered" | "cancelled" | "failed"; "turn_id"?: string; "error"?: string; "duplicate": boolean };
 export type TeamDelegationRequest = { "workspace_id": string; "event_id": string; "origin_turn_id": string; "target_chat_id": string; "prompt": string; "notify_origin"?: boolean; "strict_model"?: boolean };
 export type TeamDelegationReceipt = { "task_id": string; "target_chat_id": string; "turn_id": string };
 export type DetachedTaskSnapshot = { "task_id": string; "origin_turn_id": string; "parent_task_id"?: string; "target_chat_id"?: string; "result_turn_id"?: string; "output"?: string; "error"?: string; "delivery_error"?: string; "status": "running" | "completed" | "failed" | "cancelled"; [key: string]: unknown };
+export type IndependentJobRequest = { "workspace_id": string; "request_id": string; "prompt": string; "strict_model"?: boolean };
+export type IndependentJobReceipt = { "task_id": string; "turn_id": string };
+export type ChoiceClassificationRequest = { "request_id": string; "context": unknown; "question": string; "choices": Array<{ "label": string; "description": string }> };
+export type ChoiceClassificationResult = { "choice": string; "model": string; "request_id": string; "invocation_id": string };
 export type PhaseClassificationRequest = { "request_id": string; "phase_id": string; "final_output": string; "task_context": unknown; "attempt": number };
 export type PhaseClassificationResult = { "model": string; "request_id": string; "invocation_id": string; "decision": "BLOCKED" | "NOT BLOCKED" };
 export type CompletionTerminalSnapshotUsage = { "input_tokens"?: number; "output_tokens"?: number; "duration_ms"?: number; "sprite_ms"?: number; "sprite_ram_gb_ms"?: number; "tool_calls"?: number; "cost_usd"?: number | null; "billing"?: BillingState; "usage_cost"?: UsageCost };
@@ -135,6 +139,10 @@ export type CancelDetachedTaskParams = { "chat_id": string; "task_id": string; b
 export type CancelDetachedTaskResult = { "task_id": string; "status": "cancelled"; "subtree": boolean };
 export type ClassifyPhaseParams = { "chat_id": string; body: PhaseClassificationRequest };
 export type ClassifyPhaseResult = PhaseClassificationResult;
+export type ClassifyChoiceParams = { "chat_id": string; body: ChoiceClassificationRequest };
+export type ClassifyChoiceResult = ChoiceClassificationResult;
+export type StartIndependentJobParams = { "chat_id": string; body: IndependentJobRequest };
+export type StartIndependentJobResult = IndependentJobReceipt;
 export type SendChatMessageParams = { "chat_id": string; "idempotencyKey"?: string; body: ChatMessageRequest };
 export type SendChatMessageResult = ChatMessageAccepted;
 export type StreamChatEventsParams = { "chat_id": string; "after"?: number };
@@ -289,6 +297,10 @@ export class GeneratedClient {
  cancelDetachedTask(params: CancelDetachedTaskParams, options: RequestOptions = {}): Promise<CancelDetachedTaskResult> { return this.transport.request(operations.cancelDetachedTask, params, options); }
  /** Classify whether a workflow phase is blocked */
  classifyPhase(params: ClassifyPhaseParams, options: RequestOptions = {}): Promise<ClassifyPhaseResult> { return this.transport.request(operations.classifyPhase, params, options); }
+ /** Choose one explicit workflow branch */
+ classifyChoice(params: ClassifyChoiceParams, options: RequestOptions = {}): Promise<ClassifyChoiceResult> { return this.transport.request(operations.classifyChoice, params, options); }
+ /** Start a native job without a parent turn */
+ startIndependentJob(params: StartIndependentJobParams, options: RequestOptions = {}): Promise<StartIndependentJobResult> { return this.transport.request(operations.startIndependentJob, params, options); }
  /** Send a message and start a turn */
  sendChatMessage(params: SendChatMessageParams, options: RequestOptions = {}): Promise<SendChatMessageResult> { return this.transport.request(operations.sendChatMessage, params, options); }
  /** Stream chat events */
@@ -434,7 +446,7 @@ export class GeneratedClient {
  readonly attachments = { upload: this.uploadChatAttachment.bind(this), list: this.listChatAttachments.bind(this), get: this.getChatAttachment.bind(this), retry: this.retryChatAttachment.bind(this), delete: this.deleteChatAttachment.bind(this), download: this.downloadChatAttachment.bind(this) };
  readonly workspaces = { create: this.createWorkspace.bind(this), list: this.listWorkspaces.bind(this), get: this.getWorkspace.bind(this), update: this.updateWorkspace.bind(this) };
  readonly tools = { create: this.createUserTool.bind(this), list: this.listUserTools.bind(this), get: this.getUserTool.bind(this), update: this.updateUserTool.bind(this), delete: this.deleteUserTool.bind(this) };
- readonly chats = { create: this.createChat.bind(this), list: this.listChats.bind(this), get: this.getChat.bind(this), sendMessage: this.sendChatMessage.bind(this), eventsResponse: this.streamChatEvents.bind(this), cancel: this.cancelChatTurn.bind(this), steer: this.steerChatTurn.bind(this), submitToolOutput: this.resolveChatTool.bind(this), submitApproval: this.resolveChatApproval.bind(this), deliver: this.deliverWorkflowResult.bind(this), delegate: this.delegateToTeam.bind(this), task: this.getDetachedTask.bind(this), cancelTask: this.cancelDetachedTask.bind(this), classifyPhase: this.classifyPhase.bind(this), fork: this.forkChat.bind(this), restore: this.restoreChat.bind(this) };
+ readonly chats = { create: this.createChat.bind(this), list: this.listChats.bind(this), get: this.getChat.bind(this), sendMessage: this.sendChatMessage.bind(this), eventsResponse: this.streamChatEvents.bind(this), cancel: this.cancelChatTurn.bind(this), steer: this.steerChatTurn.bind(this), submitToolOutput: this.resolveChatTool.bind(this), submitApproval: this.resolveChatApproval.bind(this), deliver: this.deliverWorkflowResult.bind(this), delegate: this.delegateToTeam.bind(this), task: this.getDetachedTask.bind(this), cancelTask: this.cancelDetachedTask.bind(this), classifyPhase: this.classifyPhase.bind(this), classifyChoice: this.classifyChoice.bind(this), startJob: this.startIndependentJob.bind(this), fork: this.forkChat.bind(this), restore: this.restoreChat.bind(this) };
  readonly completions = { list: this.listCompletions.bind(this), get: this.getCompletion.bind(this) };
  readonly workspaceFiles = { get: this.indexWorkspaceFiles.bind(this), create: this.createWorkspaceFile.bind(this), update: this.updateWorkspaceFile.bind(this), delete: this.deleteWorkspaceFile.bind(this), download: this.downloadWorkspaceFile.bind(this), convertToPdf: this.convertWorkspaceFileToPdf.bind(this), uploadSource: this.uploadWikiSource.bind(this), sourceStatus: this.getWikiSource.bind(this), downloadSource: this.downloadWikiSource.bind(this) };
  readonly agents = { create: this.createAgent.bind(this), list: this.listAgents.bind(this), get: this.getAgent.bind(this), update: this.updateAgent.bind(this), delete: this.deleteAgent.bind(this) };
