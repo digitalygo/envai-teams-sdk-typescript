@@ -95,7 +95,7 @@ export async function loadDefinitions(path: string): Promise<DefinitionManifest>
 /** Comparison strips server enrichment; manifest identity deliberately preserves optional presence. */
 export function normalizeDefinition(type: DefinitionType, input: DefinitionPayload, agentIds: Record<string,string> = {}): DefinitionPayload {
   const payload = structuredClone(input);
-  for (const key of ['id','user_id','created_at','updated_at']) delete payload[key];
+  for (const key of ['id','user_id','project_id','created_by_user_id','created_at','updated_at']) delete payload[key];
   if (type === 'agent') {
     for (const field of ['tools_enabled','external_tools_enabled']) if (payload[field] != null) payload[field] = names(payload[field]);
     for (const field of ['description','model','tools_enabled','external_tools_enabled','permissions','config']) if (payload[field] == null || typeof payload[field] === 'object' && Object.keys(payload[field] as object).length === 0) delete payload[field];

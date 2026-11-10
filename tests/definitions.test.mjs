@@ -47,7 +47,7 @@ test('TOOLING-02 validation rejects malformed local definitions and model refere
  const m=manifest();delete m.tools.echo.timeout_seconds;assert.equal(compileDefinitions(m).tools.echo.timeout_seconds,120);m.tools.echo.timeout_seconds=800;assert.equal(compileDefinitions(m).tools.echo.timeout_seconds,600);m.tools.echo.timeout_seconds=0;assert.equal(compileDefinitions(m).tools.echo.timeout_seconds,1);
 });
 test('comparison preserves arbitrary schema while normalizing server enrichment',()=>{
- assert.deepEqual(normalizeDefinition('agent',{id:'x',user_id:'u',created_at:'x',updated_at:'x',name:'n',description:null,model:null,permissions:{},config:[],tools_enabled:[],external_tools_enabled:null}),{name:'n'});
+ assert.deepEqual(normalizeDefinition('agent',{id:'x',user_id:'u',project_id:'p',created_by_user_id:null,created_at:'x',updated_at:'x',name:'n',description:null,model:null,permissions:{},config:[],tools_enabled:[],external_tools_enabled:null}),{name:'n'});
  assert.deepEqual(normalizeDefinition('team',{name:'t',description:null,orchestrator_id:'a',members:[{agent_definition_id:'b',role:null,name:'B',position:1}]},{a:'primary',b:'worker'}),{name:'t',orchestrator_id:'primary',members:[{agent_definition_id:'worker',role:null}]});
  assert.deepEqual(definitionDiff({nested:{a:1,b:2},list:[1],deleted:5},{nested:{a:2,c:3},list:[2],added:1}),[{path:'nested.a',kind:'changed'},{path:'nested.b',kind:'removed'},{path:'nested.c',kind:'added'},{path:'list',kind:'changed'},{path:'deleted',kind:'removed'},{path:'added',kind:'added'}]);
  assert.throws(()=>planDefinitions(manifest(),{records:{}},{tool:{},agent:{},team:{}},{scope:'invalid'}));assert.throws(()=>new DefinitionSynchronizer('',new MemoryDefinitionStateStore(),remote(),manifest()));

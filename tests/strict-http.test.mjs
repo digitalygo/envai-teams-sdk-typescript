@@ -30,7 +30,7 @@ test('strict multipart checks actual Blob slots before projection and preserves 
 test('all 78 canonical operations have request and success schema coverage; binary/SSE remain separate',()=>{
  const found=new Set();let jsonResponses=0,otherResponses=0;
  for(const item of Object.values(canonical.paths))for(const operation of Object.values(item)){
-  if(!operation.operationId)continue;const id=operation.operationId;found.add(id);
+  if(!Object.hasOwn(operations,operation.operationId))continue;const id=operation.operationId;found.add(id);
   try{validateHttpRequest(id,{},3);}catch(error){assert.ok(error instanceof ProtocolError);assert.doesNotMatch(error.message,/No canonical HTTP schema/);}
   for(const [status,response]of Object.entries(operation.responses))if(/^2\d\d$/.test(status)){
    if(response.content?.['application/json']?.schema){jsonResponses++;try{validateHttpResponse(id,Number(status),null,3);}catch(error){assert.ok(error instanceof ProtocolError);assert.doesNotMatch(error.message,/No canonical HTTP schema|Undeclared success status/);}}
@@ -41,7 +41,7 @@ test('all 78 canonical operations have request and success schema coverage; bina
  assert.throws(()=>validateHttpRequest('unknown',{},3),ProtocolError);
 });
 test('strict legacy historical CRUD uses its pinned schema and still refuses mutations',async()=>{
- const c=new EnvaiClient({baseUrl:'https://offline.test',contractVersion:2,strictValidation:true,fetch:async()=>json(fixtures.response_cases.valid)});assert.deepEqual(await c.getAgent({agent_id:agentId}),fixtures.response_cases.valid.data);await assert.rejects(c.createAgent({body:{name:'x',mode:'primary',system_prompt:'x'}}),/historical read-only/);
+ const c=new EnvaiClient({baseUrl:'https://offline.test',contractVersion:2,strictValidation:true,fetch:async()=>json(fixtures.legacy_valid)});assert.deepEqual(await c.getAgent({agent_id:agentId}),fixtures.legacy_valid.data);await assert.rejects(c.createAgent({body:{name:'x',mode:'primary',system_prompt:'x'}}),/historical read-only/);
 });
 test('strict canonical additive fields survive and non-JSON/shape-invalid bodies fail before effects',async()=>{
  const extra={...fixtures.response_cases.valid.data,future_field:{version:1}};const c=new EnvaiClient({baseUrl:'https://offline.test',strictValidation:true,fetch:async()=>json({data:extra})});assert.deepEqual((await c.getAgent({agent_id:agentId})).future_field,{version:1});

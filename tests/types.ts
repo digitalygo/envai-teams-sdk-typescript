@@ -55,3 +55,16 @@ const invalidTeamUpdate: TeamUpdateRequest = { members: 'all' };
 const emptyTeamUpdate: TeamUpdateRequest = {};
 const completionPage: CompletionPageParams = {workspace_id:'w',chat_id:'c',page:2};
 void workspaceUpdate; void toolUpdate; void agentUpdate; void teamUpdate; void emptyWorkspaceUpdate; void invalidWorkspaceUpdate; void invalidToolUpdate; void invalidAgentUpdate; void emptyAgentUpdate; void invalidTeamUpdate; void emptyTeamUpdate; void completionPage;
+
+import type { Workspace, Chat, Agent, Team, Completion, ProjectTool, GetUserToolParams, GetProjectToolParams } from '../src/index.js';
+function tenancyTypes(resource: Workspace | Chat | Agent | Team, completion: Completion, tool: ProjectTool) {
+ const project: string = resource.project_id;
+ const creator: string | null = resource.created_by_user_id;
+ const payer: string = completion.api_key_id;
+ const actor: string | null = completion.user_id;
+ const toolName: string = tool.name;
+ return {project, creator, payer, actor, toolName};
+}
+const oldToolParams: GetUserToolParams = {name:'echo'};
+const newToolParams: GetProjectToolParams = oldToolParams;
+void tenancyTypes; void newToolParams;

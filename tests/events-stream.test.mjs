@@ -26,6 +26,7 @@ test('all declared event types validate through full external-def schema',()=>{
   if(t==='array')return Array.from({length:s.minItems??0},()=>make(s.items));
   if(t==='object'||s.properties)return Object.fromEntries((s.required??[]).map(k=>[k,make(s.properties[k])]));
   if(t==='string'){
+    if(s.pattern==='^[A-Z]{3}$')return 'USD';
     if(s.format==='date-time')return '2026-10-12T22:00:00Z';
     if(s.pattern?.startsWith('^')){const prefix=s.pattern.match(/^\^([a-z]+_)/)?.[1];if(prefix)return prefix+'01ARZ3NDEKTSV4RRFFQ69G5FAV';}
     return 'x'.repeat(s.minLength??1);

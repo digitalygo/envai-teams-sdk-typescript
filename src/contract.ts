@@ -124,7 +124,8 @@ for (const [version, document] of [[3, current], [2, legacy]] as const) {
 }
 ajv.addFormat('binary', true);
 function httpOperation(id: string, version: ContractVersion): HttpSchemaOperation {
-  const operation = httpSchemaOperations.get(`${version}:${id === 'negotiateContract' ? 'getCapabilities' : version === 2 ? id.replace(/Legacy$/, '') : id}`);
+  const canonicalId = version === 2 ? id.replace(/Legacy$/, '').replace('ProjectTool', 'UserTool') : id.replace('UserTool', 'ProjectTool');
+  const operation = httpSchemaOperations.get(`${version}:${id === 'negotiateContract' ? 'getCapabilities' : canonicalId}`);
   if (!operation) throw new ProtocolError(`No canonical HTTP schema for ${id} in contract ${version}`);
   return operation;
 }

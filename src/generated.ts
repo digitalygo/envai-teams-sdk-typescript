@@ -36,7 +36,99 @@ export type WikiFileProcessedEvent = { "schema_version": "1"; "event_id": string
 export type WikiFileDeletedEvent = { "schema_version": "1"; "event_id": string; "event_type": "wiki.outbox.file.deleted"; "operation_id": string; "workspace_id": string; "occurred_at": string; "file_id": string; "source_revision": number; "previous_canonical_raw_path": string | null; "lifecycle": "deleted"; [key: string]: unknown };
 export type WikiOperationEvent = ({ "schema_version": "1"; "event_id": string; "event_type": "wiki.inbox.completed" | "wiki.inbox.failed" | "wiki.outbox.completed" | "wiki.outbox.failed" | "wiki.sync.completed" | "wiki.sync.failed"; "operation_id": string; "workspace_id": string; "occurred_at": string; "status": "completed" | "failed"; "phases": { "inbox"?: PhaseResult; "outbox"?: PhaseResult }; "finished_at": string; "billing": BillingState; "usage_cost": UsageCost; [key: string]: unknown });
 export type WikiWebhookEvent = (WikiFileProcessedEvent | WikiFileDeletedEvent | WikiOperationEvent);
+export type AuthUser = { "id": string; "name": string; "email": string; "email_verified": boolean; "email_verified_at": string | null; "is_super_admin": boolean; [key: string]: unknown };
+export type AuthUserResource = { "data": AuthUser; [key: string]: unknown };
+export type EmailVerificationResource = { "data": { "email_verified": true } };
+export type AuthUserCollection = { "data": Array<AuthUser>; "links": { "first"?: string | null; "last"?: string | null; "prev"?: string | null; "next"?: string | null; [key: string]: unknown }; "meta": { "current_page"?: number; "from"?: number | null; "last_page"?: number; "per_page"?: number; "to"?: number | null; "total"?: number; [key: string]: unknown }; [key: string]: unknown };
+export type CsrfResource = { "data": { "csrf_token": string; [key: string]: unknown }; [key: string]: unknown };
+export type MessageResource = { "data": { "message": string; [key: string]: unknown }; [key: string]: unknown };
+export type LoginRequest = { "email": string; "password": string; [key: string]: unknown };
+export type RegisterRequest = { "name": string; "email": string; "password": string; "company_name": string; [key: string]: unknown };
+export type RegisterFromInvitationRequest = { "token": string; "name": string; "email": string; "password": string; [key: string]: unknown };
+export type ForgotPasswordRequest = { "email": string; [key: string]: unknown };
+export type ResetPasswordRequest = { "token": string; "email": string; "password": string; [key: string]: unknown };
+export type ResolveInvitationRequest = { "token": string };
+export type InvitationResolution = { "email": string; "account_exists": boolean };
+export type InvitationResolutionResource = { "data": InvitationResolution };
+export type AcceptInvitationRequest = { "token": string; [key: string]: unknown };
+export type PlatformRoleUpdateRequest = { "is_super_admin": boolean; [key: string]: unknown };
+export type Company = { "id": string; "name": string; "created_by_user_id": string | null; "role": "user" | "admin" | null; "created_at": string; "updated_at": string; [key: string]: unknown };
+export type CompanyResource = { "data": Company; [key: string]: unknown };
+export type CompanyCollection = { "data": Array<Company>; "links": { "first"?: string | null; "last"?: string | null; "prev"?: string | null; "next"?: string | null; [key: string]: unknown }; "meta": { "current_page"?: number; "from"?: number | null; "last_page"?: number; "per_page"?: number; "to"?: number | null; "total"?: number; [key: string]: unknown }; [key: string]: unknown };
+export type CompanyCreateRequest = { "name": string; [key: string]: unknown };
+export type CompanyUpdateRequest = { "name": string; [key: string]: unknown };
+export type CompanyMember = { "id": string; "company_id": string; "user_id": string; "name": string | null; "email": string | null; "role": "user" | "admin"; "created_at": string; "updated_at": string; [key: string]: unknown };
+export type CompanyMemberResource = { "data": CompanyMember; [key: string]: unknown };
+export type CompanyMemberCollection = { "data": Array<CompanyMember>; "links": { "first"?: string | null; "last"?: string | null; "prev"?: string | null; "next"?: string | null; [key: string]: unknown }; "meta": { "current_page"?: number; "from"?: number | null; "last_page"?: number; "per_page"?: number; "to"?: number | null; "total"?: number; [key: string]: unknown }; [key: string]: unknown };
+export type CompanyMemberRoleUpdateRequest = { "role": "user" | "admin"; [key: string]: unknown };
+export type CompanyInvitation = { "id": string; "company_id": string; "email": string; "role": "user" | "admin"; "status": "pending" | "accepted" | "revoked" | "expired"; "expires_at": string | null; "accepted_user_id": string | null; "accepted_at": string | null; "invited_by_user_id": string | null; "created_at": string; "updated_at": string; [key: string]: unknown };
+export type CompanyInvitationResource = { "data": CompanyInvitation; [key: string]: unknown };
+export type CompanyInvitationCollection = { "data": Array<CompanyInvitation>; "links": { "first"?: string | null; "last"?: string | null; "prev"?: string | null; "next"?: string | null; [key: string]: unknown }; "meta": { "current_page"?: number; "from"?: number | null; "last_page"?: number; "per_page"?: number; "to"?: number | null; "total"?: number; [key: string]: unknown }; [key: string]: unknown };
+export type CompanyInvitationCreateRequest = { "email": string; "role": "user" | "admin"; [key: string]: unknown };
+export type Project = { "id": string; "company_id": string; "name": string; "description": string | null; "created_at": string; "updated_at": string; [key: string]: unknown };
+export type ProjectResource = { "data": Project; [key: string]: unknown };
+export type ProjectCollection = { "data": Array<Project>; "links": { "first"?: string | null; "last"?: string | null; "prev"?: string | null; "next"?: string | null; [key: string]: unknown }; "meta": { "current_page"?: number; "from"?: number | null; "last_page"?: number; "per_page"?: number; "to"?: number | null; "total"?: number; [key: string]: unknown }; [key: string]: unknown };
+export type ProjectCreateRequest = { "name": string; "description"?: string | null; [key: string]: unknown };
+export type ProjectUpdateRequest = { "name": string; "description"?: string | null; [key: string]: unknown };
+export type BillingWallet = { "company_id": string; "currency": "EUR"; "balance": string | null; "reserved": string | null; "available": string | null; "revision": number; "enabled": boolean; "payments_configured": boolean; "payment_method_configured": boolean; "financial_state"?: "normal" | "review_required" | null; "financial_review_reason"?: string | null; "auto_recharge": BillingAutoRecharge; "capability"?: { "configured"?: boolean; "reason"?: string; "version"?: string } };
+export type BillingWalletResource = { "data": BillingWallet; [key: string]: unknown };
+export type BillingTransaction = { "id": string; "kind": "consumption" | "consumption_adjustment" | "topup_credit" | "topup_reversal" | "adjustment"; "amount": string; "currency": "EUR"; "status": string; "created_at": string; "credit_amount"?: string; "amount_paid"?: string | null; "tax_amount"?: string | null };
+export type BillingTransactionCollection = { "data": Array<BillingTransaction>; "links": { "first"?: string | null; "last"?: string | null; "prev"?: string | null; "next"?: string | null; [key: string]: unknown }; "meta": { "current_page"?: number; "from"?: number | null; "last_page"?: number; "per_page"?: number; "to"?: number | null; "total"?: number; [key: string]: unknown }; [key: string]: unknown };
+export type BillingTopupQuoteRequest = { "credit_amount": string };
+export type BillingTopupQuote = { "credit_amount": string; "amount_before_tax": string; "currency": "EUR"; "quote_version": string; "tax_status": string };
+export type BillingTopupQuoteResource = { "data": BillingTopupQuote; [key: string]: unknown };
+export type BillingTopupRequest = { "credit_amount": string; "quote_version": string; "consent_version"?: string | null };
+export type BillingTopupCheckout = { "topup_id": string; "checkout_url": string; "credit_amount": string; "amount_before_tax": string; "currency": "EUR"; "quote_version": string; "tax_status": string };
+export type BillingTopupCheckoutResource = { "data": BillingTopupCheckout; [key: string]: unknown };
+export type BillingPaymentMethodSetupRequest = { "consent_version": string };
+export type BillingPaymentMethodSetup = { "setup_id": string; "checkout_url": string; "consent_version": string };
+export type BillingPaymentMethodSetupResource = { "data": BillingPaymentMethodSetup; [key: string]: unknown };
+export type BillingAutoRechargeUpdateRequest = { "enabled": boolean; "amount"?: string | null; "threshold"?: string | null; "consent_version"?: string | null };
+export type BillingAutoRecharge = { "enabled": boolean; "amount": string; "threshold": string; "state": "disabled" | "idle" | "armed" | "submitting" | "pending" | "unknown"; "consent_version": string | null };
+export type BillingAutoRechargeResource = { "data": BillingAutoRecharge; [key: string]: unknown };
+export type BillingSpendLimitReset = { "unit": "hour" | "day" | "week" | "month"; "every": number; "anchor_at": string; "timezone": string };
+export type BillingSpendPeriod = { "starts_at": string; "ends_at": string | null; "spent": string; "reserved": string; "remaining": string | null; "reset_version": number };
+export type BillingSpendLimit = { "scope": "project" | "api_key"; "scope_id": string; "project_id": string; "api_key_id": string | null; "amount": string | null; "reset": (BillingSpendLimitReset | null); "period": (BillingSpendPeriod | null); "can_manage": boolean };
+export type BillingSpendLimitResource = { "data": BillingSpendLimit; [key: string]: unknown };
+export type BillingSpendLimitUpdateRequest = { "amount": string | null; "reset": (BillingSpendLimitReset | null) };
+export type BillingWebhookOk = { "status": "ok"; [key: string]: unknown };
+export type BillingError = { "error": { "type": "billing_error"; "code": string; "message"?: string; [key: string]: unknown }; [key: string]: unknown };
+export type ProjectMember = { "id": string; "company_id": string; "project_id": string; "user_id": string; "name": string | null; "email": string | null; "created_at": string; "updated_at": string; [key: string]: unknown };
+export type ProjectMemberResource = { "data": ProjectMember; [key: string]: unknown };
+export type ProjectMemberCollection = { "data": Array<ProjectMember>; "links": { "first"?: string | null; "last"?: string | null; "prev"?: string | null; "next"?: string | null; [key: string]: unknown }; "meta": { "current_page"?: number; "from"?: number | null; "last_page"?: number; "per_page"?: number; "to"?: number | null; "total"?: number; [key: string]: unknown }; [key: string]: unknown };
+export type CleanupIntentState = { "id": string; "kind": string; "status": "pending" | "processing" | "completed" | "failed"; "attempts": number; "deadline_at": string | null; "started_at": string | null; "finished_at": string | null; "last_error_code": string | null; [key: string]: unknown };
+export type CleanupResult = { "resource_type": "workspace" | "chat" | "project" | "company"; "resource_id": string; "cleanup": Array<CleanupIntentState>; [key: string]: unknown };
+export type CleanupResource = { "data": CleanupResult; [key: string]: unknown };
+export type UsageMoney = { "currency": string; "amount": string; [key: string]: unknown };
+export type UsageKeyBreakdown = { "api_key_id": string; "totals": Array<UsageMoney>; "invocation_count": number; "unknown_invocations": number; "not_submitted_invocations": number; "completion_count": number; "unknown_currency_observations": number; [key: string]: unknown };
+export type UsageProjectBreakdown = { "project_id": string; "totals": Array<UsageMoney>; "invocation_count": number; "unknown_invocations": number; "not_submitted_invocations": number; "completion_count": number; "media": UsageMediaTotals; [key: string]: unknown };
+export type UsageMediaTotals = { "totals": Array<UsageMoney>; "priced_observations": number; "unknown_observations": number; "unknown_currency_observations": number; "by_api_key": Array<UsageKeyBreakdown>; [key: string]: unknown };
+export type UsageReportDay = { "date": string; "totals": Array<UsageMoney>; "invocation_count": number; "unknown_invocations": number; "not_submitted_invocations": number; "completion_count": number; "by_api_key": Array<UsageKeyBreakdown>; "media": UsageMediaTotals; "by_project": Array<UsageProjectBreakdown> | null; [key: string]: unknown };
+export type UsageReportCollection = { "data": Array<UsageReportDay>; "links": { "first"?: string | null; "last"?: string | null; "prev"?: string | null; "next"?: string | null; [key: string]: unknown }; "meta": { "current_page"?: number; "from"?: number | null; "last_page"?: number; "per_page"?: number; "to"?: number | null; "total"?: number; [key: string]: unknown }; [key: string]: unknown };
+export type ProjectLogEntry = { "id": string; "project_id": string; "api_key_id": string | null; "actor_api_key_id": string | null; "chat_id": string; "workspace_id": string; "seq": number; "turn_id": string | null; "type": string; "ts": string; "agent": { [key: string]: unknown }; "data": { [key: string]: unknown }; [key: string]: unknown };
+export type ProjectLogCollection = { "data": Array<ProjectLogEntry>; "links": { "first"?: string | null; "last"?: string | null; "prev"?: string | null; "next"?: string | null; [key: string]: unknown }; "meta": { "current_page"?: number; "from"?: number | null; "last_page"?: number; "per_page"?: number; "to"?: number | null; "total"?: number; [key: string]: unknown }; [key: string]: unknown };
+export type InternalWikiDispatchRequest = { "project_id": string; "api_key_id": string; "workspace_id": string; "actor": { "operation_id": string; "claim_token": string; "fence": number; "phase"?: "inbox" | "outbox"; "turn_id"?: string; "chat_id"?: string; "file_id"?: string; "attempt_id"?: string; "attempt_fence"?: number; [key: string]: unknown }; "action": string; "arguments": unknown; [key: string]: unknown };
+export type InternalDispatchResponse = { "data": { [key: string]: unknown }; [key: string]: unknown };
+export type InternalAttachmentResolveRequest = { "project_id": string; "api_key_id": string; "workspace_id": string; "chat_id": string; "message": string; "idempotency_key": string; "attachment_ids": Array<string>; [key: string]: unknown };
+export type InternalAttachmentResolveResource = { "data": { "project_id": string; "api_key_id": string; "input_id": string; "turn_id": string; "message": string; "prepared_input": string; "manifest": Array<InternalAttachmentManifest>; "accepted": boolean; [key: string]: unknown }; [key: string]: unknown };
+export type InternalAttachmentManifest = { "attachment_id": string; "original_name": string; "revision": number; "sha256": string; "bytes": number; "conversion": AttachmentConversion; [key: string]: unknown };
+export type InternalBillingToolLimits = { "max_powered_ms": number; "cleanup_grace_ms": 5000 };
+export type InternalBillingLlmRates = { "prompt": string; "completion": string; "request": string };
+export type InternalBillingReservation = { "reservation_id": string; "max_amount": string; "currency": "EUR"; "max_tokens": number; "max_price": (InternalBillingLlmRates | {  }); "tool_limits"?: InternalBillingToolLimits; "status": "held" };
+export type InternalBillingReservationResource = { "data": InternalBillingReservation; [key: string]: unknown };
+export type InternalBillingAdmissionRequest = { "project_id": string; "api_key_id": string; "workspace_id": string; "chat_id": string };
+export type InternalBillingReserveRequest = { "invocation_id": string; "owner_token": string; "project_id": string; "api_key_id": string; "workspace_id": string; "chat_id"?: string | null; "origin_type": "turn" | "wiki_operation" | "upload" | "classification"; "origin_id": string; "claim_token"?: string | null; "claim_fence"?: number | null; "purpose"?: string; "operation"?: string };
+export type InternalBillingSettleRequest = { "invocation_id": string; "owner_token": string; "project_id": string; "api_key_id": string; "workspace_id": string; "chat_id"?: string | null; "origin_type": "turn" | "wiki_operation" | "upload" | "classification"; "origin_id": string; "claim_token"?: string | null; "claim_fence"?: number | null; "purpose"?: string; "operation"?: string; "observation_id"?: string | null };
+export type InternalBillingReleaseRequest = { "invocation_id": string; "owner_token": string; "project_id": string; "api_key_id": string; "workspace_id": string; "chat_id"?: string | null; "origin_type": "turn" | "wiki_operation" | "upload" | "classification"; "origin_id": string; "claim_token"?: string | null; "claim_fence"?: number | null; "purpose"?: string; "operation"?: string };
+export type InternalBillingAdmissionResource = { "data": { "allowed": true }; [key: string]: unknown };
+export type InternalBillingSettleResource = { "data": { "reservation_id": string; "status": "settled" | "unknown"; "notices": Array<InternalBillingNotice> }; [key: string]: unknown };
+export type InternalBillingReleaseResource = { "data": { "reservation_id": string; "status": "released" }; [key: string]: unknown };
+export type InternalBillingNotice = (InternalBillingCompanyNotice | InternalBillingScopedNotice);
+export type InternalBillingCompanyNotice = { "id": string; "type": "billing.credit_exhausted"; "reason": string; "scope": "company"; "currency": "EUR" };
+export type InternalBillingScopedNotice = { "id": string; "type": "billing.limit_reached"; "reason": string; "scope": "project" | "api_key"; "currency": "EUR"; "amount": string; "remaining": string; "reset_at"?: string | null };
+export type InternalBillingError = { "error": { "type": "billing_error"; "code": string; "details": (null | { "notice": InternalBillingNotice }) } };
 export type Error = { "error": { "type": "unauthenticated" | "invalid_request" | "not_found" | "conflict" | "validation_error" | "access_denied" | "provider_error" | "server_error" | "internal_error" | "file_not_found" | "file_conflict" | "invalid_path" | "file_too_large" | "file_service_error" | "file_service_unavailable" | "too_many_requests"; "code"?: string | null; "message": string; "details"?: { [key: string]: unknown } | null; [key: string]: unknown }; [key: string]: unknown };
+export type ChatCronConflictError = { "error": { "type": "cron_not_active" | "cron_schedule_invalid"; "code": "cron_not_active" | "cron_schedule_invalid"; "message": "The cron request could not be completed." } };
 export type AttachmentManifest = { "attachment_id": string; "original_name": string; "mime_type"?: string; "mode"?: "native"; "revision": number; "sha256": string; "bytes": number; "conversion": { [key: string]: unknown }; [key: string]: unknown };
 export type AttachmentConversion = { "status": "queued" | "running" | "completed" | "failed" | "not_required"; "error_code": string | null; "recoverable": boolean; "next_retry_at": string | null; "retryable": boolean; [key: string]: unknown };
 export type ChatAttachment = { "attachment_id": string; "workspace_id": string; "chat_id": string; "original_name": string; "mime_type": string; "byte_size": number; "lifecycle": "staging" | "uploaded" | "ready" | "deleting" | "deleted"; "revision": number; "conversion": AttachmentConversion; "derived": ({ "sha256": string; "bytes": number; "conversion": { [key: string]: unknown }; [key: string]: unknown } | null); "expires_at": string; "attached_at": string | null; "usage_cost": UsageCost; [key: string]: unknown };
@@ -55,41 +147,55 @@ export type OrchestratorContextItem = { "kind": "compacted" | "assistant"; "turn
 export type RestoreChatRequest = { "orchestrator_context": Array<OrchestratorContextItem>; [key: string]: unknown };
 export type RestoreChatAccepted = { "status": "restored"; "turn_id": string | null; [key: string]: unknown };
 export type Capabilities = { "protocol_version": 3; "families": Array<"turn" | "agent" | "chat" | "task">; "event_types": Array<string>; "tool_kinds": Array<"server" | "client" | "knowledge" | "code">; "features": Array<string>; "contract_version": 3; "supported_contract_versions": Array<2 | 3>; "legacy_v2_mode": "historical_reads_replay_only"; [key: string]: unknown };
-export type Workspace = { "id": string; "user_id": string; "name": string; "metadata": WorkspaceMetadata; "created_at": string; "updated_at": string; [key: string]: unknown };
+export type Workspace = { "id": string; "project_id": string; "created_by_user_id": string | null; "name": string; "metadata": WorkspaceMetadata; "created_at": string; "updated_at": string; [key: string]: unknown };
 export type WorkspaceResource = { "data": Workspace; [key: string]: unknown };
 export type WorkspaceCollection = { "data": Array<Workspace>; [key: string]: unknown };
 export type WorkspaceMetadata = ({ [key: string]: unknown } | Array<unknown>);
 export type WorkspaceCreateRequest = { "name": string; "metadata"?: WorkspaceMetadata; [key: string]: unknown };
 export type WorkspaceUpdateRequest = ({ "name"?: string; "metadata"?: WorkspaceMetadata; [key: string]: unknown } & ({ "name": string } | { "metadata": WorkspaceMetadata }));
-export type UserTool = { "id": string; "name": string; "kind": "client"; "description": string | null; "parameters": { [key: string]: unknown }; "timeout_seconds": number; "created_at": string; "updated_at": string };
-export type UserToolResource = { "data": UserTool; [key: string]: unknown };
-export type UserToolCollection = { "data": Array<UserTool>; [key: string]: unknown };
-export type UserToolCreateRequest = { "name": string; "kind"?: "client"; "description"?: string | null; "parameters": { "type": "object"; [key: string]: unknown }; "timeout_seconds"?: number };
-export type UserToolUpdateRequest = ({ "description"?: string | null; "parameters"?: { "type": "object"; [key: string]: unknown }; "timeout_seconds"?: number } & ({ "description": string | null } | { "parameters": { "type": "object"; [key: string]: unknown } } | { "timeout_seconds": number }));
-export type Chat = { "id": string; "workspace_id": string; "user_id": string; "team_id": string; "title": string | null; "created_at": string; "updated_at": string; [key: string]: unknown };
+export type ProjectTool = { "id": string; "name": string; "kind": "client"; "description": string | null; "parameters": { [key: string]: unknown }; "timeout_seconds": number; "created_at": string; "updated_at": string };
+export type ProjectToolResource = { "data": ProjectTool; [key: string]: unknown };
+export type ProjectToolCollection = { "data": Array<ProjectTool>; [key: string]: unknown };
+export type ProjectToolCreateRequest = { "name": string; "kind"?: "client"; "description"?: string | null; "parameters": { "type": "object"; [key: string]: unknown }; "timeout_seconds"?: number };
+export type ProjectToolUpdateRequest = ({ "description"?: string | null; "parameters"?: { "type": "object"; [key: string]: unknown }; "timeout_seconds"?: number } & ({ "description": string | null } | { "parameters": { "type": "object"; [key: string]: unknown } } | { "timeout_seconds": number }));
+export type ProjectSkill = { "id": string; "project_id": string; "created_by_user_id": string | null; "name": string; "description": string | null; "content": string; "created_at": string; "updated_at": string };
+export type ProjectSkillResource = { "data": ProjectSkill; [key: string]: unknown };
+export type ProjectSkillCollection = { "data": Array<ProjectSkill>; [key: string]: unknown };
+export type ProjectSkillCreateRequest = { "name": string; "description"?: string | null; "content": string; [key: string]: unknown };
+export type ProjectSkillUpdateRequest = { "name"?: string; "description"?: string | null; "content"?: string; [key: string]: unknown };
+export type Chat = { "id": string; "workspace_id": string; "project_id": string; "created_by_user_id": string | null; "team_id": string; "title": string | null; "created_at": string; "updated_at": string; [key: string]: unknown };
 export type ChatResource = { "data": Chat; [key: string]: unknown };
 export type ChatCollection = { "data": Array<Chat>; [key: string]: unknown };
 export type ChatCreateRequest = { "team_id": string; [key: string]: unknown };
-export type Completion = { "id": string; "workspace_id": string; "chat_id": string; "team_id": string; "user_id": string; "model_orchestrator"?: string | null; "models_subagents": Array<string>; "started_at": string; "finished_at"?: string | null; "duration_ms"?: number | null; "usage": { "prompt_tokens"?: number; "completion_tokens"?: number; "sprite_cpu_ms"?: number; "sprite_ram_gb_ms"?: number; [key: string]: unknown }; "billing"?: BillingState; "usage_cost"?: UsageCost; "terminal_snapshot"?: (CompletionTerminalSnapshot | null); "cost_usd": number | null; "status": "running" | "succeeded" | "failed" | "canceled"; "finish_reason"?: "stop" | "error" | "canceled" | null; "content_hash"?: string | null; "created_at": string; "updated_at": string; [key: string]: unknown };
+export type ChatCron = { "id": string; "workspace_id": string; "origin_chat_id": string; "team_id": string; "target_mode": "same_chat" | "new_chat"; "prompt": string; "interval_minutes": number | null; "daily_at": string | null; "timezone": string | null; "start_at": string | null; "repeat_count": number | null; "until": string | null; "status": "active" | "completed"; "scheduled_count": number; "delivery_count": number; "next_due_at": string | null; "max_until": string; "created_at": string; "updated_at": string; [key: string]: unknown };
+export type ChatCronResource = { "data": ChatCron; [key: string]: unknown };
+export type ChatCronCollection = { "data": Array<ChatCron>; [key: string]: unknown };
+export type ChatCronUpdateRequest = { "target_mode"?: "same_chat" | "new_chat"; "prompt"?: string; "interval_minutes"?: number | null; "daily_at"?: string | null; "timezone"?: string | null; "start_at"?: string | null; "repeat_count"?: number | null; "until"?: string | null; [key: string]: unknown };
+export type ChatCronToolArguments = (ChatCronToolCreateArguments | ChatCronToolListArguments | ChatCronToolCancelArguments);
+export type ChatCronToolCreateArguments = ({ "action": "create"; "prompt": string; "target_mode"?: "same_chat" | "new_chat"; "interval_minutes"?: number; "daily_at"?: string; "timezone"?: string; "start_at"?: string; "repeat_count"?: number; "until"?: string } & (unknown | unknown) & (unknown | unknown));
+export type ChatCronToolListArguments = { "action": "list" };
+export type ChatCronToolCancelArguments = { "action": "cancel"; "cron_id": string };
+export type ChatUpdateRequest = { "title"?: string | null; [key: string]: unknown };
+export type Completion = { "id": string; "workspace_id": string; "chat_id": string; "team_id": string; "project_id": string; "api_key_id": string; "user_id": string | null; "model_orchestrator"?: string | null; "models_subagents": Array<string>; "started_at": string; "finished_at"?: string | null; "duration_ms"?: number | null; "usage": { "prompt_tokens"?: number; "completion_tokens"?: number; "sprite_cpu_ms"?: number; "sprite_ram_gb_ms"?: number; [key: string]: unknown }; "billing"?: BillingState; "usage_cost"?: UsageCost; "terminal_snapshot"?: (CompletionTerminalSnapshot | null); "cost_usd": number | null; "status": "running" | "succeeded" | "failed" | "canceled"; "finish_reason"?: "stop" | "error" | "canceled" | null; "content_hash"?: string | null; "created_at": string; "updated_at": string; [key: string]: unknown };
 export type CompletionResource = { "data": Completion; [key: string]: unknown };
 export type CompletionCollection = { "data": Array<Completion>; "links": { "first"?: string | null; "last"?: string | null; "prev"?: string | null; "next"?: string | null; [key: string]: unknown }; "meta": { "current_page"?: number; "from"?: number | null; "last_page"?: number; "per_page"?: number; "to"?: number | null; "total"?: number; [key: string]: unknown }; [key: string]: unknown };
-export type Agent = { "id": string; "user_id": string; "name": string; "description": string | null; "system_prompt": string; "model": string | null; "mode": "primary" | "subagent"; "tools_enabled": Array<AgentTool>; "external_tools_enabled": Array<AgentTool>; "permissions": { [key: string]: unknown }; "can_write_knowledge": boolean; "can_write_skills": boolean; "config": { [key: string]: unknown }; "created_at": string; "updated_at": string; [key: string]: unknown };
+export type Agent = { "id": string; "project_id": string; "created_by_user_id": string | null; "name": string; "description": string | null; "system_prompt": string; "model": string | null; "mode": "primary" | "subagent"; "tools_enabled": Array<AgentTool>; "external_tools_enabled": Array<AgentTool>; "permissions": { [key: string]: unknown }; "can_write_knowledge": boolean; "can_write_skills": boolean; "config": { [key: string]: unknown }; "created_at": string; "updated_at": string; [key: string]: unknown };
 export type AgentResource = { "data": Agent; [key: string]: unknown };
 export type AgentCollection = { "data": Array<Agent>; [key: string]: unknown };
 export type AgentCreateRequest = { "name": string; "description"?: string | null; "system_prompt": string; "model"?: string | null; "mode": "primary" | "subagent"; "tools_enabled"?: Array<AgentTool>; "external_tools_enabled"?: Array<AgentTool>; "permissions"?: { [key: string]: unknown }; "can_write_knowledge"?: boolean; "can_write_skills"?: boolean; "config"?: { [key: string]: unknown }; [key: string]: unknown };
 export type AgentUpdateRequest = ({ "name"?: string; "description"?: string | null; "system_prompt"?: string; "model"?: string | null; "mode"?: "primary" | "subagent"; "tools_enabled"?: Array<AgentTool>; "external_tools_enabled"?: Array<AgentTool>; "permissions"?: { [key: string]: unknown }; "can_write_knowledge"?: boolean; "can_write_skills"?: boolean; "config"?: { [key: string]: unknown }; [key: string]: unknown } & ({ "name": string } | { "description": string | null } | { "system_prompt": string } | { "model": string | null } | { "mode": "primary" | "subagent" } | { "tools_enabled": Array<AgentTool> } | { "external_tools_enabled": Array<AgentTool> } | { "permissions": { [key: string]: unknown } } | { "can_write_knowledge": boolean } | { "can_write_skills": boolean } | { "config": { [key: string]: unknown } }));
 export type AgentTool = { "name": string; [key: string]: unknown };
-export type Team = { "id": string; "user_id": string; "name": string; "description": string | null; "orchestrator_id": string; "members": Array<TeamMember>; "created_at": string; "updated_at": string; [key: string]: unknown };
+export type Team = { "id": string; "project_id": string; "created_by_user_id": string | null; "name": string; "description": string | null; "orchestrator_id": string; "members": Array<TeamMember>; "created_at": string; "updated_at": string; [key: string]: unknown };
 export type TeamResource = { "data": Team; [key: string]: unknown };
 export type TeamCollection = { "data": Array<Team>; [key: string]: unknown };
 export type TeamCreateRequest = { "name": string; "description"?: string | null; "orchestrator_id": string; "members"?: Array<TeamMemberCreateRequest>; [key: string]: unknown };
 export type TeamUpdateRequest = ({ "name"?: string; "description"?: string | null; "orchestrator_id"?: string; "members"?: Array<TeamMemberCreateRequest>; [key: string]: unknown } & ({ "name": string } | { "description": string | null } | { "orchestrator_id": string } | { "members": Array<TeamMemberCreateRequest> }));
 export type TeamMember = { "agent_definition_id": string; "name": string; "position": number; "role": string | null; [key: string]: unknown };
 export type TeamMemberCreateRequest = { "agent_definition_id": string; "role"?: string | null; [key: string]: unknown };
-export type ApiKey = { "id": string; "name": string; "scopes": Array<"completions:write">; "expires_at": string | null; "revoked_at": string | null; "created_at": string; [key: string]: unknown };
+export type ApiKey = { "id": string; "project_id": string; "created_by_user_id": string | null; "name": string; "scopes": Array<"completions:write">; "expires_at": string | null; "revoked_at": string | null; "created_at": string; [key: string]: unknown };
 export type ApiKeyCreated = { "data": (ApiKey & { "token": string; [key: string]: unknown }); [key: string]: unknown };
 export type ApiKeyCollection = { "data": Array<ApiKey>; [key: string]: unknown };
-export type ApiKeyCreate = { "name": string; "scopes"?: Array<"completions:write">; "expires_at"?: "30d" | "90d" | "1y" | "never"; [key: string]: unknown };
+export type ApiKeyCreate = { "name": string; "scopes"?: Array<"completions:write">; "expires_at"?: "1h" | "30d" | "90d" | "1y" | "never"; "spend_limit"?: BillingSpendLimitUpdateRequest; [key: string]: unknown };
 export type JwksDocument = { "keys": Array<Jwk>; [key: string]: unknown };
 export type Jwk = { "kty": "OKP"; "crv": "Ed25519"; "x": string; "kid": string; "use": "sig"; "alg": "EdDSA"; [key: string]: unknown };
 export type ModelList = { "object": "list"; "data": Array<ModelListEntry>; "defaults": ModelDefaults; [key: string]: unknown };
@@ -129,6 +235,23 @@ export type WorkspaceFileRequest = { "path": string; "content": string; [key: st
 export type ConvertToPdfRequest = { "path": string; [key: string]: unknown };
 export type ThrottleError = { "error": { "type": "too_many_requests"; "message": string }; [key: string]: unknown };
 export type CapabilitiesLegacy = { "protocol_version": 2; "families": Array<"turn" | "agent" | "chat">; "event_types": Array<string>; "tool_kinds": Array<"server" | "client" | "knowledge" | "code">; "features": Array<"replay" | "fork" | "restore" | "ping" | "background_delegation" | "client_tools" | "chat_title">; [key: string]: unknown };
+export type ActivityDurationBucket = { "lower_ms": number; "upper_ms": number | null; "count": number };
+export type ActivityDurationDistribution = { "candidate_count": number; "sample_count": number; "missing_count": number; "invalid_count": number; "zero_count": number; "min_ms": number | null; "max_ms": number | null; "avg_ms": number | null; "p50_ms": number | null; "p95_ms": number | null; "buckets": Array<ActivityDurationBucket> };
+export type ActivityDailyCounts = { "date": string; "event_count": number; "tool_start_count": number; "file_read_start_count": number; "turn_failure_count": number; "agent_failure_count": number; "tool_failure_count": number };
+export type ActivityEventTypeGroups = { "items": Array<{ "type": string; "count": number }>; "other_count": number; "omitted_group_count": number };
+export type ActivityToolGroups = { "items": Array<{ "tool_name": string; "kind": string | null; "count": number }>; "other_count": number; "omitted_group_count": number; "missing_name_count": number };
+export type ProjectActivityAnalytics = { "window": { "from": string; "to": string; "timezone": "UTC"; "api_key_id": string | null; "chat_id": string | null }; "coverage": { "source": "retained_chat_events"; "aggregation": "all_retained_matching_rows"; "execution_history_complete": false; "configured_retention_days": number; "observed_event_count": number; "oldest_observed_at": string | null; "newest_observed_at": string | null }; "daily": Array<ActivityDailyCounts>; "event_types": ActivityEventTypeGroups; "tools": ActivityToolGroups; "failures": { "turn_event_count": number; "agent_event_count": number; "tool_event_count": number; "tool_result_unknown_status_count": number }; "durations": { "tool_execution": ActivityDurationDistribution; "turn_execution": ActivityDurationDistribution }; "file_reads": Array<{ "tool_name": "read" | "wiki_read" | "skill_read" | "wiki_read_source" | "wiki_read_artifact"; "count": number }> };
+export type ProjectActivityAnalyticsResource = { "data": ProjectActivityAnalytics };
+/** @deprecated Tools are project-scoped; use ProjectTool. */
+export type UserTool = ProjectTool;
+/** @deprecated Tools are project-scoped; use ProjectToolCreateRequest. */
+export type UserToolCreateRequest = ProjectToolCreateRequest;
+/** @deprecated Tools are project-scoped; use ProjectToolUpdateRequest. */
+export type UserToolUpdateRequest = ProjectToolUpdateRequest;
+/** @deprecated Tools are project-scoped; use ProjectToolResource. */
+export type UserToolResource = ProjectToolResource;
+/** @deprecated Tools are project-scoped; use ProjectToolCollection. */
+export type UserToolCollection = ProjectToolCollection;
 export type DeliverWorkflowResultParams = { "chat_id": string; body: NativeDeliveryRequest };
 export type DeliverWorkflowResultResult = NativeDeliveryReceipt;
 export type DelegateToTeamParams = { "chat_id": string; body: TeamDelegationRequest };
@@ -173,16 +296,16 @@ export type GetWorkspaceParams = { "workspace_id": string };
 export type GetWorkspaceResult = Workspace;
 export type UpdateWorkspaceParams = { "workspace_id": string; body: WorkspaceUpdateRequest };
 export type UpdateWorkspaceResult = Workspace;
-export type CreateUserToolParams = { body: UserToolCreateRequest };
-export type CreateUserToolResult = UserTool;
-export type ListUserToolsParams = Record<string, never>;
-export type ListUserToolsResult = Array<UserTool>;
-export type GetUserToolParams = { "name": string };
-export type GetUserToolResult = UserTool;
-export type UpdateUserToolParams = { "name": string; body: UserToolUpdateRequest };
-export type UpdateUserToolResult = UserTool;
-export type DeleteUserToolParams = { "name": string };
-export type DeleteUserToolResult = void;
+export type CreateProjectToolParams = { body: ProjectToolCreateRequest };
+export type CreateProjectToolResult = ProjectTool;
+export type ListProjectToolsParams = Record<string, never>;
+export type ListProjectToolsResult = Array<ProjectTool>;
+export type GetProjectToolParams = { "name": string };
+export type GetProjectToolResult = ProjectTool;
+export type UpdateProjectToolParams = { "name": string; body: ProjectToolUpdateRequest };
+export type UpdateProjectToolResult = ProjectTool;
+export type DeleteProjectToolParams = { "name": string };
+export type DeleteProjectToolResult = void;
 export type CreateChatParams = { "workspace_id": string; body: ChatCreateRequest };
 export type CreateChatResult = Chat;
 export type ListChatsParams = { "workspace_id": string };
@@ -235,7 +358,7 @@ export type DeleteApiKeyParams = { "key_id": string };
 export type DeleteApiKeyResult = void;
 export type TestGenerateImageParams = { body: TestImageGenerateRequest };
 export type TestGenerateImageResult = { "status": "received"; "prompt": string; "model_code": string; "files_count": number; "files": Array<TestImageFileMetadata>; "received_at": string; [key: string]: unknown };
-export type CreateImageGenerationParams = { body: ImageGenerationRequest };
+export type CreateImageGenerationParams = { "idempotencyKey"?: string; body: ImageGenerationRequest };
 export type CreateImageGenerationResult = ImageGenerationAcceptedRecord;
 export type GetImageGenerationParams = { "record": string };
 export type GetImageGenerationResult = ImageGenerationStatusRecord;
@@ -285,6 +408,26 @@ export type StreamChatEventsLegacyParams = { "chat_id": string; "after"?: number
 export type StreamChatEventsLegacyResult = Response;
 export type GetCapabilitiesLegacyParams = Record<string, never>;
 export type GetCapabilitiesLegacyResult = CapabilitiesLegacy;
+/** @deprecated Use CreateProjectToolParams. */
+export type CreateUserToolParams = CreateProjectToolParams;
+/** @deprecated Use CreateProjectToolResult. */
+export type CreateUserToolResult = CreateProjectToolResult;
+/** @deprecated Use ListProjectToolsParams. */
+export type ListUserToolsParams = ListProjectToolsParams;
+/** @deprecated Use ListProjectToolsResult. */
+export type ListUserToolsResult = ListProjectToolsResult;
+/** @deprecated Use GetProjectToolParams. */
+export type GetUserToolParams = GetProjectToolParams;
+/** @deprecated Use GetProjectToolResult. */
+export type GetUserToolResult = GetProjectToolResult;
+/** @deprecated Use UpdateProjectToolParams. */
+export type UpdateUserToolParams = UpdateProjectToolParams;
+/** @deprecated Use UpdateProjectToolResult. */
+export type UpdateUserToolResult = UpdateProjectToolResult;
+/** @deprecated Use DeleteProjectToolParams. */
+export type DeleteUserToolParams = DeleteProjectToolParams;
+/** @deprecated Use DeleteProjectToolResult. */
+export type DeleteUserToolResult = DeleteProjectToolResult;
 export class GeneratedClient {
  constructor(protected readonly transport: HttpTransport) {}
  /** Deliver an external workflow result */
@@ -331,16 +474,16 @@ export class GeneratedClient {
  getWorkspace(params: GetWorkspaceParams, options: RequestOptions = {}): Promise<GetWorkspaceResult> { return this.transport.request(operations.getWorkspace, params, options); }
  /** Update a workspace */
  updateWorkspace(params: UpdateWorkspaceParams, options: RequestOptions = {}): Promise<UpdateWorkspaceResult> { return this.transport.request(operations.updateWorkspace, params, options); }
- /** Register a client tool */
- createUserTool(params: CreateUserToolParams, options: RequestOptions = {}): Promise<CreateUserToolResult> { return this.transport.request(operations.createUserTool, params, options); }
- /** List the user's client tools */
- listUserTools(params: ListUserToolsParams = {}, options: RequestOptions = {}): Promise<ListUserToolsResult> { return this.transport.request(operations.listUserTools, params, options); }
+ /** Register a project client tool */
+ createProjectTool(params: CreateProjectToolParams, options: RequestOptions = {}): Promise<CreateProjectToolResult> { return this.transport.request(operations.createProjectTool, params, options); }
+ /** List the client tools of the project */
+ listProjectTools(params: ListProjectToolsParams = {}, options: RequestOptions = {}): Promise<ListProjectToolsResult> { return this.transport.request(operations.listProjectTools, params, options); }
  /** Get a client tool */
- getUserTool(params: GetUserToolParams, options: RequestOptions = {}): Promise<GetUserToolResult> { return this.transport.request(operations.getUserTool, params, options); }
+ getProjectTool(params: GetProjectToolParams, options: RequestOptions = {}): Promise<GetProjectToolResult> { return this.transport.request(operations.getProjectTool, params, options); }
  /** Update a client tool */
- updateUserTool(params: UpdateUserToolParams, options: RequestOptions = {}): Promise<UpdateUserToolResult> { return this.transport.request(operations.updateUserTool, params, options); }
+ updateProjectTool(params: UpdateProjectToolParams, options: RequestOptions = {}): Promise<UpdateProjectToolResult> { return this.transport.request(operations.updateProjectTool, params, options); }
  /** Delete a client tool */
- deleteUserTool(params: DeleteUserToolParams, options: RequestOptions = {}): Promise<DeleteUserToolResult> { return this.transport.request(operations.deleteUserTool, params, options); }
+ deleteProjectTool(params: DeleteProjectToolParams, options: RequestOptions = {}): Promise<DeleteProjectToolResult> { return this.transport.request(operations.deleteProjectTool, params, options); }
  /** Create a chat inside a workspace */
  createChat(params: CreateChatParams, options: RequestOptions = {}): Promise<CreateChatResult> { return this.transport.request(operations.createChat, params, options); }
  /** List chats of a workspace */
@@ -385,11 +528,11 @@ export class GeneratedClient {
  deleteTeam(params: DeleteTeamParams, options: RequestOptions = {}): Promise<DeleteTeamResult> { return this.transport.request(operations.deleteTeam, params, options); }
  /** List the LLM model catalog */
  listModels(params: ListModelsParams = {}, options: RequestOptions = {}): Promise<ListModelsResult> { return this.transport.request(operations.listModels, params, options); }
- /** Create an api key */
+ /** Unsupported in the project-key SDK: use the human console session with CSRF. */
  createApiKey(params: CreateApiKeyParams, options: RequestOptions = {}): Promise<CreateApiKeyResult> { return this.transport.request(operations.createApiKey, params, options); }
- /** List api keys */
+ /** Unsupported in the project-key SDK: use the human console session with CSRF. */
  listApiKeys(params: ListApiKeysParams = {}, options: RequestOptions = {}): Promise<ListApiKeysResult> { return this.transport.request(operations.listApiKeys, params, options); }
- /** Revoke an api key */
+ /** Unsupported in the project-key SDK: use the human console session with CSRF. */
  deleteApiKey(params: DeleteApiKeyParams, options: RequestOptions = {}): Promise<DeleteApiKeyResult> { return this.transport.request(operations.deleteApiKey, params, options); }
  /** Test image generation endpoint */
  testGenerateImage(params: TestGenerateImageParams, options: RequestOptions = {}): Promise<TestGenerateImageResult> { return this.transport.request(operations.testGenerateImage, params, options); }
@@ -443,9 +586,19 @@ export class GeneratedClient {
  streamChatEventsLegacy(params: StreamChatEventsLegacyParams, options: RequestOptions = {}): Promise<StreamChatEventsLegacyResult> { return this.transport.request(operations.streamChatEventsLegacy, params, options); }
  /** Advertised protocol metadata */
  getCapabilitiesLegacy(params: GetCapabilitiesLegacyParams = {}, options: RequestOptions = {}): Promise<GetCapabilitiesLegacyResult> { return this.transport.request(operations.getCapabilitiesLegacy, params, options); }
+ /** @deprecated Use createProjectTool; tools now belong to the key project, not the user. */
+ createUserTool(params: CreateProjectToolParams, options: RequestOptions = {}): Promise<CreateProjectToolResult> { return this.createProjectTool(params, options); }
+ /** @deprecated Use listProjectTools; tools now belong to the key project, not the user. */
+ listUserTools(params: ListProjectToolsParams = {}, options: RequestOptions = {}): Promise<ListProjectToolsResult> { return this.listProjectTools(params, options); }
+ /** @deprecated Use getProjectTool; tools now belong to the key project, not the user. */
+ getUserTool(params: GetProjectToolParams, options: RequestOptions = {}): Promise<GetProjectToolResult> { return this.getProjectTool(params, options); }
+ /** @deprecated Use updateProjectTool; tools now belong to the key project, not the user. */
+ updateUserTool(params: UpdateProjectToolParams, options: RequestOptions = {}): Promise<UpdateProjectToolResult> { return this.updateProjectTool(params, options); }
+ /** @deprecated Use deleteProjectTool; tools now belong to the key project, not the user. */
+ deleteUserTool(params: DeleteProjectToolParams, options: RequestOptions = {}): Promise<DeleteProjectToolResult> { return this.deleteProjectTool(params, options); }
  readonly attachments = { upload: this.uploadChatAttachment.bind(this), list: this.listChatAttachments.bind(this), get: this.getChatAttachment.bind(this), retry: this.retryChatAttachment.bind(this), delete: this.deleteChatAttachment.bind(this), download: this.downloadChatAttachment.bind(this) };
  readonly workspaces = { create: this.createWorkspace.bind(this), list: this.listWorkspaces.bind(this), get: this.getWorkspace.bind(this), update: this.updateWorkspace.bind(this) };
- readonly tools = { create: this.createUserTool.bind(this), list: this.listUserTools.bind(this), get: this.getUserTool.bind(this), update: this.updateUserTool.bind(this), delete: this.deleteUserTool.bind(this) };
+ readonly tools = { create: this.createProjectTool.bind(this), list: this.listProjectTools.bind(this), get: this.getProjectTool.bind(this), update: this.updateProjectTool.bind(this), delete: this.deleteProjectTool.bind(this) };
  readonly chats = { create: this.createChat.bind(this), list: this.listChats.bind(this), get: this.getChat.bind(this), sendMessage: this.sendChatMessage.bind(this), eventsResponse: this.streamChatEvents.bind(this), cancel: this.cancelChatTurn.bind(this), steer: this.steerChatTurn.bind(this), submitToolOutput: this.resolveChatTool.bind(this), submitApproval: this.resolveChatApproval.bind(this), deliver: this.deliverWorkflowResult.bind(this), delegate: this.delegateToTeam.bind(this), task: this.getDetachedTask.bind(this), cancelTask: this.cancelDetachedTask.bind(this), classifyPhase: this.classifyPhase.bind(this), classifyChoice: this.classifyChoice.bind(this), startJob: this.startIndependentJob.bind(this), fork: this.forkChat.bind(this), restore: this.restoreChat.bind(this) };
  readonly completions = { list: this.listCompletions.bind(this), get: this.getCompletion.bind(this) };
  readonly workspaceFiles = { get: this.indexWorkspaceFiles.bind(this), create: this.createWorkspaceFile.bind(this), update: this.updateWorkspaceFile.bind(this), delete: this.deleteWorkspaceFile.bind(this), download: this.downloadWorkspaceFile.bind(this), convertToPdf: this.convertWorkspaceFileToPdf.bind(this), uploadSource: this.uploadWikiSource.bind(this), sourceStatus: this.getWikiSource.bind(this), downloadSource: this.downloadWikiSource.bind(this) };

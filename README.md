@@ -1,11 +1,11 @@
 # Envai Teams TypeScript SDK
 
-A Node.js 22+ ESM client for the current Envai Teams **alpha** API. It includes typed primitives for all **78 HTTP operations**, all **36 ATP event types**, async SSE streams, turn helpers, and opt-in signed client tools.
+A Node.js 22+ ESM client for the current Envai Teams **alpha** API. It includes typed primitives for a reviewed **78-operation HTTP surface** (75 callable operations plus 3 unsupported API-key compatibility stubs), all **39 ATP event types**, async SSE streams, turn helpers, and opt-in signed client tools.
 
 **Status:** alpha prerelease available as a [GitHub release archive](https://github.com/digitalygo/envai-teams-sdk-typescript/releases/tag/v1.0.0-alpha.1). The package is not currently published to the npm registry. Prerelease APIs may change; review upgrades deliberately. API compatibility limits are described below.
 
 - [Installation and configuration](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/getting-started.md)
-- [API and models](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-reference.md) · [all 78 operations](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-inventory.md)
+- [API and models](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-reference.md) · [reviewed SDK operations](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-inventory.md)
 - [Streaming and recovery](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/streaming.md)
 - [Client-tool safety and deployment](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/client-tools.md)
 
@@ -62,7 +62,7 @@ See [typed quickstart](https://github.com/digitalygo/envai-teams-sdk-typescript/
 
 ## API and generated types
 
-Every OpenAPI `operationId` is a public method, for example `client.sendChatMessage({ chat_id, body: { message } })`. Service aliases provide `workspaces`, `tools`, `chats`, `completions`, `workspaceFiles`, `agents`, `teams`, `apiKeys`, `models`, `images`, and `capabilities`.
+Every operation in the reviewed SDK allowlist is a public method, for example `client.sendChatMessage({ chat_id, body: { message } })`. Service aliases provide `workspaces`, `tools`, `chats`, `completions`, `workspaceFiles`, `agents`, `teams`, `apiKeys`, `models`, `images`, and `capabilities`.
 
 - Request fields preserve the contract's snake_case names; runtime options use camelCase.
 - Path/query parameters are fields of the parameter object. JSON and multipart input go under `body`.
@@ -71,7 +71,7 @@ Every OpenAPI `operationId` is a public method, for example `client.sendChatMess
 - Image uploads accept `{ body: { file: new Blob([...], { type: 'image/png' }) } }`. Fetch generates the multipart boundary.
 - Optional provider webhook signature headers go in `RequestOptions.headers`. The webhook primitive is exposed for complete contract coverage; the SDK never calls it automatically.
 - `downloadArtifact` takes current signed `artifact`, `generation`, optional `expires`, and `signature` query fields, in canonical alphabetical order, without a bearer token. It does not accept the historical `path` parameter. Do not log signed URLs.
-- API-key creation preserves omitted `expires_at` (server default) versus explicit `"never"`.
+- API-key create/list/revoke methods are compatibility stubs that reject before HTTP. Key management requires an authenticated human console session with CSRF protection.
 - Completion `page` is absent from the pinned request contract, although the response is paginated. This SDK preserves the declared parameters and metadata; it does not invent an automatic page traversal API.
 
 [Complete operation inventory](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-inventory.md) and generated `*Params`/`*Result` types document the full surface. Authentication headers and host overrides cannot be supplied through per-call headers.
@@ -191,7 +191,7 @@ The bundled contracts describe API 3.0.0 and negotiated ATP v3. Exact source has
 
 `npm run generate` deterministically regenerates 123 HTTP models, request/response types, operation primitives, and 36 event payload types from both pinned contracts. SSE, cryptography, tools, and helpers remain handwritten. `npm run check:generated` fails on drift without rewriting files. The original v2 snapshots retain provenance in `testdata/contracts/provenance.json`; current shared v3/wiki sources are identified in `contracts/manifest.json`. `sources` preserves their original commit/path, byte count, SHA-256 and Git blob SHA. `generated_fixtures` separately identifies SDK-authored conformance cases and generated OpenAPI JSON. Public guides are SDK documentation, not copied contract sources. Tests verify every retained source and fixture hash.
 
-Tests make no live Envai requests and need no credentials. CI typechecks the runtime and examples, verifies generation, tests all 78 operations plus schema/SSE/signature/state-machine conformance, enforces at least 95% line/function and 90% branch coverage, and smoke-tests the packed archive on Node 22 and 24. Signature fixtures use public RFC 8032 test-key material only, never account credentials or production signing keys.
+Tests make no live Envai requests and need no credentials. CI typechecks the runtime and examples, verifies generation, tests the reviewed SDK surface plus schema/SSE/signature/state-machine conformance, enforces at least 95% line/function and 90% branch coverage, and smoke-tests the packed archive on Node 22 and 24. Signature fixtures use public RFC 8032 test-key material only, never account credentials or production signing keys.
 
 MIT, copyright 2026 DigItalyGo. Existing license text is preserved.
 
@@ -212,7 +212,7 @@ Set `strictValidation: true` on `EnvaiClient` to validate every canonical HTTP o
 
 ### Independent jobs and finite choices
 
-The native surface is pinned to Envai commit `18ce9124604874d8d4bac784b521171d2ff9e064`. Native extensions remain opt-in and default to disabled. Capability discovery is read-only; admission requires `independent_jobs`, choice classification requires `finite_choice_classification`, and delivery without an origin requires `originless_deliveries`. Explicit `strict_model: true` also requires `strict_model`.
+The native surface is pinned to Envai commit `6fc8463470396faba4aeb6acc29c91f8c529a582`. Native extensions remain opt-in and default to disabled. Capability discovery is read-only; admission requires `independent_jobs`, choice classification requires `finite_choice_classification`, and delivery without an origin requires `originless_deliveries`. Explicit `strict_model: true` also requires `strict_model`.
 
 Independent jobs start without a parent turn. Their receipt identifies the initial coordinator; final task `output` and `result_turn_id` identify the completed job. Task snapshots keep the required `origin_turn_id` key with the empty string for independent jobs. Missing origin is invalid. Keep the execution chat’s native SSE subscription and client-tool runner alive while waiting; polling helpers do not execute tools.
 
@@ -229,3 +229,11 @@ const selected = await client.chats.classifyChoice({ chat_id: chatId, body: {
   choices: [{ label: "CONTINUE", description: "No clarification required" }, { label: "ASK", description: "Owner input required" }]
 }});
 ```
+
+## Project tenancy cutover
+
+This SDK embeds the complete 146-operation server OpenAPI snapshot but generates only the explicit, reviewed 78-operation SDK allowlist in `scripts/sdk-operations.json`. It does not expose new account, company billing, internal service, or human-session APIs. The three API-key management methods remain discoverable for compatibility but always throw `CompatibilityError` before HTTP, including without a configured bearer key. Use the human console to manage keys.
+
+Use a **project API key**. `Workspace`, `Chat`, `Agent`, and `Team` now expose `project_id` and nullable `created_by_user_id`, not a user owner. `Completion` includes immutable `project_id` and `api_key_id`, while `user_id` is nullable audit provenance. Pre-tenancy v3 payloads are intentionally rejected by current strict validation; frozen v2 historical reads retain their older schema.
+
+Tools are now shared within the key's **project**, not across the creator's projects. Prefer `createProjectTool`, `listProjectTools`, `getProjectTool`, `updateProjectTool`, and `deleteProjectTool`. Deprecated `*UserTool*` method/type aliases remain source-compatible and call the same `/tools` routes, with the new project scope. `client.tools` and definition synchronization use the project-scoped endpoints. No session authentication or CSRF bypass is added.

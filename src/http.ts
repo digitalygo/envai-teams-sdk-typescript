@@ -85,6 +85,7 @@ export class HttpTransport {
   }
   observe(event: Observation): void { try { this.#observe?.(Object.freeze({ ...event })); } catch { /* Telemetry cannot change protocol behavior. */ } }
   async request<T>(operation: Operation, params: object, options: RequestOptions = {}): Promise<T> {
+    if (['createApiKey', 'listApiKeys', 'deleteApiKey'].includes(operation.id)) throw new CompatibilityError('API key management is unsupported by the project-key SDK; use an authenticated human console session with CSRF protection');
     const values = params as Record<string, unknown>;
     if(this.strictValidation) validateHttpRequest(operation.id, values, this.contractVersion);
     validateBackgroundRequest(operation.id, values.body);

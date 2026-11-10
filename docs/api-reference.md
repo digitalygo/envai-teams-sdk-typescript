@@ -4,7 +4,7 @@
 
 ## API and generated types
 
-Every OpenAPI `operationId` is a public method, for example `client.sendChatMessage({ chat_id, body: { message } })`. Service aliases provide `workspaces`, `tools`, `chats`, `completions`, `workspaceFiles`, `agents`, `teams`, `apiKeys`, `models`, `images`, `wiki`, and `capabilities`.
+Every operation in the reviewed SDK allowlist is a public method, for example `client.sendChatMessage({ chat_id, body: { message } })`. Service aliases provide `workspaces`, `tools`, `chats`, `completions`, `workspaceFiles`, `agents`, `teams`, `apiKeys`, `models`, `images`, `wiki`, and `capabilities`.
 
 - Request fields preserve the contract's snake_case names; runtime options use camelCase. The required idempotency header is exposed as `idempotencyKey` on upload/run parameters.
 - Path/query parameters are fields of the parameter object. JSON and multipart input go under `body`.
@@ -13,7 +13,7 @@ Every OpenAPI `operationId` is a public method, for example `client.sendChatMess
 - Image uploads accept `{ body: { file: new Blob([...], { type: 'image/png' }) } }`. Fetch generates the multipart boundary.
 - Optional provider webhook signature headers go in `RequestOptions.headers`. The webhook primitive is exposed for complete contract coverage; the SDK never calls it automatically.
 - `downloadArtifact` takes current signed `artifact`, `generation`, optional `expires`, and `signature` query fields, in canonical alphabetical order, without a bearer token. It does not accept the historical `path` parameter. Do not log signed URLs.
-- API-key creation preserves omitted `expires_at` (server default) versus explicit `"never"`.
+- API-key create/list/revoke methods are compatibility stubs that reject before HTTP. Key management requires an authenticated human console session with CSRF protection.
 - Completion `page` is absent from the pinned request contract, although the response is paginated. This SDK preserves the declared parameters and metadata; it does not invent an automatic page traversal API.
 
 [Complete operation inventory](api-inventory.md) and generated `*Params`/`*Result` types document the full surface. Authentication headers, contract selectors and host overrides cannot be supplied through per-call headers.
@@ -50,6 +50,14 @@ Diagnostic image requests accept `files: Blob[]` (one to four files, at most 102
 
 ### Complete optional HTTP validation
 
-`new EnvaiClient({ baseUrl, apiKey, strictValidation: true })` enables canonical request and successful JSON-envelope validation across all 78 operations. Validation runs before preflight or mutations and before response unwrapping, using the actual response status. Canonical optional fields, explicit null, constraints and additive-field rules are preserved. Invalid inputs and responses raise `ProtocolError`; API error envelopes retain their existing typed errors and request identity. This option defaults to false; existing specialized validators remain enabled independently. Multipart validates actual binary values without consuming file content; SSE and downloads use separate stream/binary checks.
+`new EnvaiClient({ baseUrl, apiKey, strictValidation: true })` enables canonical request and successful JSON-envelope validation across the reviewed callable SDK operations. Validation runs before preflight or mutations and before response unwrapping, using the actual response status. Canonical optional fields, explicit null, constraints and additive-field rules are preserved. Invalid inputs and responses raise `ProtocolError`; API error envelopes retain their existing typed errors and request identity. This option defaults to false; existing specialized validators remain enabled independently. Multipart validates actual binary values without consuming file content; SSE and downloads use separate stream/binary checks.
 
 Capability discovery retains its compatibility rules in strict mode: valid boolean feature maps normalize to positive feature lists, and future family/feature names remain valid discovery data. Other canonical shape and contract-acknowledgment checks remain enforced.
+
+## Project tenancy cutover
+
+This SDK embeds the complete 146-operation server OpenAPI snapshot but generates only the explicit, reviewed 78-operation SDK allowlist in `scripts/sdk-operations.json`. It does not expose new account, company billing, internal service, or human-session APIs. The three API-key management methods remain discoverable for compatibility but always throw `CompatibilityError` before HTTP, including without a configured bearer key. Use the human console to manage keys.
+
+Use a **project API key**. `Workspace`, `Chat`, `Agent`, and `Team` now expose `project_id` and nullable `created_by_user_id`, not a user owner. `Completion` includes immutable `project_id` and `api_key_id`, while `user_id` is nullable audit provenance. Pre-tenancy v3 payloads are intentionally rejected by current strict validation; frozen v2 historical reads retain their older schema.
+
+Tools are now shared within the key's **project**, not across the creator's projects. Prefer `createProjectTool`, `listProjectTools`, `getProjectTool`, `updateProjectTool`, and `deleteProjectTool`. Deprecated `*UserTool*` method/type aliases remain source-compatible and call the same `/tools` routes, with the new project scope. `client.tools` and definition synchronization use the project-scoped endpoints. No session authentication or CSRF bypass is added.

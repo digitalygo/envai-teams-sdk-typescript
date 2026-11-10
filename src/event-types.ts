@@ -6,7 +6,7 @@ export type AtpUsage = { "input_tokens": number; "output_tokens": number; "cost_
 export type AtpToolKind = "server" | "client" | "knowledge" | "code";
 export type AtpPing = {  };
 export type AtpChatTitleUpdated = { "title": string };
-export type AtpTurnStarted = { "turn_id": string; "input": string; "attachments"?: Array<AtpChatAttachmentManifestEvent> };
+export type AtpTurnStarted = { "turn_id": string; "input": string; "source"?: "user" | "cron"; "attachments"?: Array<AtpChatAttachmentManifestEvent> };
 export type AtpTurnCompleted = { "turn_id": string; "usage": AtpUsage; "cost": number | null; "chat_usage": AtpUsage; "chat_cost": number | null; "finish_reason": string; "billing"?: AtpBillingState; "usage_cost"?: AtpUsageCost };
 export type AtpTurnCancelled = { "turn_id": string; "reason": string; "usage": AtpUsage; "cost": number | null; "chat_usage": AtpUsage; "chat_cost": number | null; "billing"?: AtpBillingState; "usage_cost"?: AtpUsageCost };
 export type AtpTurnFailed = { "turn_id": string; "code": string; "message": string; "usage": AtpUsage; "cost": number | null; "chat_usage": AtpUsage; "chat_cost": number | null; "billing"?: AtpBillingState; "usage_cost"?: AtpUsageCost };
@@ -44,6 +44,9 @@ export type AtpTaskFailed = { "task_id": string; "origin_turn_id": string; "stat
 export type AtpTaskCancelled = { "task_id": string; "origin_turn_id": string; "status": "completed" | "blocked" | "failed" | "cancelled"; "output": string; "error": string; "result_turn_id"?: string; [key: string]: unknown };
 export type AtpChatDeliveryQueued = { "task_id": string; "origin_turn_id": string; "status": "completed" | "blocked" | "failed" | "cancelled"; "event_id": string; [key: string]: unknown };
 export type AtpChatDeliveryDelivered = { "task_id": string; "origin_turn_id": string; "status": "completed" | "blocked" | "failed" | "cancelled"; "event_id": string; "delivery_turn_id": string; [key: string]: unknown };
+export type AtpChatCronWakeup = { "cron_id": string; "occurrence_id": string; "scheduled_at": string; "delivered_at": string; "prompt": string; "target_mode": "same_chat" | "new_chat"; "dispatch_mode": "turn_started" | "turn_injected" };
+export type AtpBillingLimit_reached = { "reason": "limit_reached" | "limit_insufficient" | "limit_reserved"; "scope": "project" | "api_key"; "currency": string; "reset_at"?: string | null; "amount"?: string; "remaining"?: string };
+export type AtpBillingCredit_exhausted = { "reason": "financial_review_required" | "credit_exhausted" | "credit_reserved" | "credit_insufficient" | "credit_unavailable"; "scope": "company"; "currency": string };
 export interface EventDataMap {
 "ping": AtpPing;
 "chat.title.updated": AtpChatTitleUpdated;
@@ -81,9 +84,12 @@ export interface EventDataMap {
 "task.cancelled": AtpTaskCancelled;
 "chat.delivery.queued": AtpChatDeliveryQueued;
 "chat.delivery.delivered": AtpChatDeliveryDelivered;
+"chat.cron.wakeup": AtpChatCronWakeup;
+"billing.limit_reached": AtpBillingLimit_reached;
+"billing.credit_exhausted": AtpBillingCredit_exhausted;
 }
 export type EventType = keyof EventDataMap;
 export type KnownEvent<T extends EventType = EventType> = { [K in T]: AtpEnvelope & { known: true; type: K; data: EventDataMap[K] } }[T] | LegacyKnownEvent<Extract<T, LegacyEventType>>;
 export type UnknownEvent = (AtpEnvelope | LegacyAtpEnvelope) & { known: false };
 export type ATPEvent = KnownEvent | UnknownEvent;
-export const knownEventTypes = ["ping","chat.title.updated","turn.started","turn.completed","turn.cancelled","turn.failed","turn.steered","agent.started","agent.plan","agent.text.delta","agent.text.done","agent.reasoning.delta","agent.reasoning.done","agent.delegated","agent.tool.start","agent.tool.delta","agent.tool.complete","agent.tool.request","agent.tool.result","agent.escalate","agent.escalation.result","agent.artifact","agent.context.compacting","agent.context.compacted","agent.done","agent.failed","approval.request","approval.response","approval.expire","task.started","task.event","task.completed","task.failed","task.cancelled","chat.delivery.queued","chat.delivery.delivered"] as const;
+export const knownEventTypes = ["ping","chat.title.updated","turn.started","turn.completed","turn.cancelled","turn.failed","turn.steered","agent.started","agent.plan","agent.text.delta","agent.text.done","agent.reasoning.delta","agent.reasoning.done","agent.delegated","agent.tool.start","agent.tool.delta","agent.tool.complete","agent.tool.request","agent.tool.result","agent.escalate","agent.escalation.result","agent.artifact","agent.context.compacting","agent.context.compacted","agent.done","agent.failed","approval.request","approval.response","approval.expire","task.started","task.event","task.completed","task.failed","task.cancelled","chat.delivery.queued","chat.delivery.delivered","chat.cron.wakeup","billing.limit_reached","billing.credit_exhausted"] as const;

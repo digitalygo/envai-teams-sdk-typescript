@@ -11,14 +11,14 @@ import {negotiatedFetch,json} from './helpers.mjs';
 
 test('definition adapter routes all identities, strips immutable tool fields, preserves failures',async()=>{
  const calls=[];const client={listModels:async()=>({data:[{id:'llm',type:'llm'},{id:'team',type:'team'}]})};
- for(const noun of ['UserTool','Agent','Team'])for(const verb of ['list','get','create','update','delete'])client[verb+noun+(verb==='list'?'s':'')]=async p=>{calls.push([verb+noun,p]);return verb==='list'?[]:verb==='delete'?undefined:{id:'id',name:'name'};};
+ for(const noun of ['ProjectTool','Agent','Team'])for(const verb of ['list','get','create','update','delete'])client[verb+noun+(verb==='list'?'s':'')]=async p=>{calls.push([verb+noun,p]);return verb==='list'?[]:verb==='delete'?undefined:{id:'id',name:'name'};};
  const remote=new ClientDefinitionRemote(client);assert.deepEqual(await remote.models(),['llm']);
  for(const type of ['tool','agent','team']){await remote.list(type);await remote.get(type,'id','name');await remote.create(type,{name:'name'});await remote.update(type,'id','name',{name:'name',kind:'client',description:'new'});await remote.delete(type,'id','name');}
- assert.deepEqual(calls.find(c=>c[0]==='updateUserTool')[1],{name:'name',body:{description:'new'}});
+ assert.deepEqual(calls.find(c=>c[0]==='updateProjectTool')[1],{name:'name',body:{description:'new'}});
  assert.deepEqual(calls.find(c=>c[0]==='getAgent')[1],{agent_id:'id'});
  assert.deepEqual(calls.find(c=>c[0]==='getTeam')[1],{team_id:'id'});
- client.getUserTool=async()=>{throw new EnvaiError('missing',404,'missing',null,null,null);};assert.equal(await remote.get('tool','id','name'),undefined);
- client.getUserTool=async()=>{throw new EnvaiError('denied',403,'denied',null,null,null);};await assert.rejects(remote.get('tool','id','name'),/denied/);
+ client.getProjectTool=async()=>{throw new EnvaiError('missing',404,'missing',null,null,null);};assert.equal(await remote.get('tool','id','name'),undefined);
+ client.getProjectTool=async()=>{throw new EnvaiError('denied',403,'denied',null,null,null);};await assert.rejects(remote.get('tool','id','name'),/denied/);
 });
 
 test('definition adapter uses authenticated ordinary SDK transport',async()=>{

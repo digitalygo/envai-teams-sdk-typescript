@@ -423,7 +423,13 @@ export const operations = {
     "path": "/workspaces",
     "public": false,
     "origin": false,
-    "parameters": [],
+    "parameters": [
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      }
+    ],
     "bodyMime": "application/json",
     "bodyRequired": true,
     "mode": "json",
@@ -435,7 +441,13 @@ export const operations = {
     "path": "/workspaces",
     "public": false,
     "origin": false,
-    "parameters": [],
+    "parameters": [
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      }
+    ],
     "bodyRequired": false,
     "mode": "json",
     "unwrap": true
@@ -475,31 +487,43 @@ export const operations = {
     "mode": "json",
     "unwrap": true
   },
-  "createUserTool": {
-    "id": "createUserTool",
+  "createProjectTool": {
+    "id": "createProjectTool",
     "method": "POST",
     "path": "/tools",
     "public": false,
     "origin": false,
-    "parameters": [],
+    "parameters": [
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      }
+    ],
     "bodyMime": "application/json",
     "bodyRequired": true,
     "mode": "json",
     "unwrap": true
   },
-  "listUserTools": {
-    "id": "listUserTools",
+  "listProjectTools": {
+    "id": "listProjectTools",
     "method": "GET",
     "path": "/tools",
     "public": false,
     "origin": false,
-    "parameters": [],
+    "parameters": [
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      }
+    ],
     "bodyRequired": false,
     "mode": "json",
     "unwrap": true
   },
-  "getUserTool": {
-    "id": "getUserTool",
+  "getProjectTool": {
+    "id": "getProjectTool",
     "method": "GET",
     "path": "/tools/{name}",
     "public": false,
@@ -509,14 +533,19 @@ export const operations = {
         "name": "name",
         "in": "path",
         "required": true
+      },
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
       }
     ],
     "bodyRequired": false,
     "mode": "json",
     "unwrap": true
   },
-  "updateUserTool": {
-    "id": "updateUserTool",
+  "updateProjectTool": {
+    "id": "updateProjectTool",
     "method": "PUT",
     "path": "/tools/{name}",
     "public": false,
@@ -526,6 +555,11 @@ export const operations = {
         "name": "name",
         "in": "path",
         "required": true
+      },
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
       }
     ],
     "bodyMime": "application/json",
@@ -533,8 +567,8 @@ export const operations = {
     "mode": "json",
     "unwrap": true
   },
-  "deleteUserTool": {
-    "id": "deleteUserTool",
+  "deleteProjectTool": {
+    "id": "deleteProjectTool",
     "method": "DELETE",
     "path": "/tools/{name}",
     "public": false,
@@ -544,6 +578,11 @@ export const operations = {
         "name": "name",
         "in": "path",
         "required": true
+      },
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
       }
     ],
     "bodyRequired": false,
@@ -827,7 +866,13 @@ export const operations = {
     "path": "/agents",
     "public": false,
     "origin": false,
-    "parameters": [],
+    "parameters": [
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      }
+    ],
     "bodyMime": "application/json",
     "bodyRequired": true,
     "mode": "json",
@@ -839,7 +884,13 @@ export const operations = {
     "path": "/agents",
     "public": false,
     "origin": false,
-    "parameters": [],
+    "parameters": [
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      }
+    ],
     "bodyRequired": false,
     "mode": "json",
     "unwrap": true
@@ -902,7 +953,13 @@ export const operations = {
     "path": "/teams",
     "public": false,
     "origin": false,
-    "parameters": [],
+    "parameters": [
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      }
+    ],
     "bodyMime": "application/json",
     "bodyRequired": true,
     "mode": "json",
@@ -914,7 +971,13 @@ export const operations = {
     "path": "/teams",
     "public": false,
     "origin": false,
-    "parameters": [],
+    "parameters": [
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      }
+    ],
     "bodyRequired": false,
     "mode": "json",
     "unwrap": true
@@ -977,7 +1040,13 @@ export const operations = {
     "path": "/models",
     "public": false,
     "origin": false,
-    "parameters": [],
+    "parameters": [
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      }
+    ],
     "bodyRequired": false,
     "mode": "json",
     "unwrap": false
@@ -988,7 +1057,13 @@ export const operations = {
     "path": "/api-keys",
     "public": false,
     "origin": false,
-    "parameters": [],
+    "parameters": [
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      }
+    ],
     "bodyMime": "application/json",
     "bodyRequired": true,
     "mode": "json",
@@ -1000,7 +1075,13 @@ export const operations = {
     "path": "/api-keys",
     "public": false,
     "origin": false,
-    "parameters": [],
+    "parameters": [
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      }
+    ],
     "bodyRequired": false,
     "mode": "json",
     "unwrap": true
@@ -1016,6 +1097,11 @@ export const operations = {
         "name": "key_id",
         "in": "path",
         "required": true
+      },
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
       }
     ],
     "bodyRequired": false,
@@ -1040,7 +1126,13 @@ export const operations = {
     "path": "/images/generations",
     "public": false,
     "origin": false,
-    "parameters": [],
+    "parameters": [
+      {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false
+      }
+    ],
     "bodyMime": "application/json",
     "bodyRequired": true,
     "mode": "json",
@@ -1057,6 +1149,11 @@ export const operations = {
         "name": "record",
         "in": "path",
         "required": true
+      },
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
       }
     ],
     "bodyRequired": false,
@@ -1069,7 +1166,13 @@ export const operations = {
     "path": "/images/uploads",
     "public": false,
     "origin": false,
-    "parameters": [],
+    "parameters": [
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      }
+    ],
     "bodyMime": "multipart/form-data",
     "bodyRequired": true,
     "mode": "json",
@@ -1081,7 +1184,13 @@ export const operations = {
     "path": "/images/models",
     "public": false,
     "origin": false,
-    "parameters": [],
+    "parameters": [
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      }
+    ],
     "bodyRequired": false,
     "mode": "json",
     "unwrap": true
