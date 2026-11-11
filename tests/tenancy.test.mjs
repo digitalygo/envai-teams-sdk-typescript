@@ -43,5 +43,5 @@ test('reviewed SDK surface cannot silently acquire human or internal operations'
  const humanOnly=Object.values(schema.paths).flatMap(item=>Object.values(item)).filter(op=>Object.hasOwn(operations,op.operationId)&&op.security?.length&&!op.security.some(scheme=>Object.hasOwn(scheme,'bearerAuth'))).map(op=>op.operationId);
  assert.deepEqual(humanOnly.sort(),manifest.unsupportedOperations.toSorted());
  const client=new EnvaiClient({baseUrl:'https://offline.test'});
- for(const name of ['login','createCompany','createCompanyBillingTopup','reserveBilling','internalWikiDispatch','updateApiKeySpendLimit'])assert.equal(client[name],undefined);
+ for(const name of ['login','createCompany','createCompanyBillingTopup','reserveBilling','internalWikiDispatch','updateApiKeySpendLimit','getProjectLogs'])assert.equal(client[name],undefined);
 });

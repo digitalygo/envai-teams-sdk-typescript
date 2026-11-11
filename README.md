@@ -212,7 +212,7 @@ Set `strictValidation: true` on `EnvaiClient` to validate every canonical HTTP o
 
 ### Independent jobs and finite choices
 
-The native surface is pinned to Envai commit `6fc8463470396faba4aeb6acc29c91f8c529a582`. Native extensions remain opt-in and default to disabled. Capability discovery is read-only; admission requires `independent_jobs`, choice classification requires `finite_choice_classification`, and delivery without an origin requires `originless_deliveries`. Explicit `strict_model: true` also requires `strict_model`.
+The native surface is pinned to Envai commit `964c11fe72887329e8d06c2afb483442d643b290`. Native extensions remain opt-in and default to disabled. Capability discovery is read-only; admission requires `independent_jobs`, choice classification requires `finite_choice_classification`, and delivery without an origin requires `originless_deliveries`. Explicit `strict_model: true` also requires `strict_model`.
 
 Independent jobs start without a parent turn. Their receipt identifies the initial coordinator; final task `output` and `result_turn_id` identify the completed job. Task snapshots keep the required `origin_turn_id` key with the empty string for independent jobs. Missing origin is invalid. Keep the execution chat’s native SSE subscription and client-tool runner alive while waiting; polling helpers do not execute tools.
 

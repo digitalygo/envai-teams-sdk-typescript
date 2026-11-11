@@ -68,3 +68,14 @@ function tenancyTypes(resource: Workspace | Chat | Agent | Team, completion: Com
 const oldToolParams: GetUserToolParams = {name:'echo'};
 const newToolParams: GetProjectToolParams = oldToolParams;
 void tenancyTypes; void newToolParams;
+
+// Project log filtering remains outside the reviewed bearer SDK surface.
+// @ts-expect-error Project logs remain outside the reviewed SDK callable surface.
+void client.getProjectLogs;
+
+import { type ProjectEventTypeFilters, type ProjectEventTypeFiltersResource } from '../src/index.js';
+const logTypes: ProjectEventTypeFilters = { types: ['chat.created'] };
+const logFilters: ProjectEventTypeFiltersResource = { data: logTypes };
+// @ts-expect-error Filter types are strings, not numeric identifiers.
+const invalidLogTypes: ProjectEventTypeFilters = { types: [7] };
+void logFilters; void invalidLogTypes;
