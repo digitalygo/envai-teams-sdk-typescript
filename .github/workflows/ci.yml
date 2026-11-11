@@ -27,7 +27,7 @@ jobs:
           --health-cmd pg_isready --health-interval 5s
           --health-timeout 5s --health-retries 10
       mysql:
-        image: mysql:8
+        image: mysql:26
         env:
           MYSQL_ROOT_PASSWORD: envai-test-only
           MYSQL_ROOT_HOST: '%'
