@@ -4,7 +4,7 @@
 
 ## API and generated types
 
-Every OpenAPI `operationId` is a public method, for example `client.sendChatMessage({ chat_id, body: { message } })`. Service aliases provide `workspaces`, `tools`, `chats`, `completions`, `workspaceFiles`, `agents`, `teams`, `apiKeys`, `models`, `images`, `wiki`, and `capabilities`.
+Every operation in the reviewed SDK allowlist is a public method, for example `client.sendChatMessage({ chat_id, body: { message } })`. Service aliases provide `workspaces`, `tools`, `chats`, `completions`, `workspaceFiles`, `agents`, `teams`, `apiKeys`, `models`, `images`, `wiki`, and `capabilities`.
 
 - Request fields preserve the contract's snake_case names; runtime options use camelCase. The required idempotency header is exposed as `idempotencyKey` on upload/run parameters.
 - Path/query parameters are fields of the parameter object. JSON and multipart input go under `body`.
@@ -13,7 +13,7 @@ Every OpenAPI `operationId` is a public method, for example `client.sendChatMess
 - Image uploads accept `{ body: { file: new Blob([...], { type: 'image/png' }) } }`. Fetch generates the multipart boundary.
 - Optional provider webhook signature headers go in `RequestOptions.headers`. The webhook primitive is exposed for complete contract coverage; the SDK never calls it automatically.
 - `downloadArtifact` takes current signed `artifact`, `generation`, optional `expires`, and `signature` query fields, in canonical alphabetical order, without a bearer token. It does not accept the historical `path` parameter. Do not log signed URLs.
-- API-key creation preserves omitted `expires_at` (server default) versus explicit `"never"`.
+- API-key create/list/revoke methods are compatibility stubs that reject before HTTP. Key management requires an authenticated human console session with CSRF protection.
 - Completion `page` is absent from the pinned request contract, although the response is paginated. This SDK preserves the declared parameters and metadata; it does not invent an automatic page traversal API.
 
 [Complete operation inventory](api-inventory.md) and generated `*Params`/`*Result` types document the full surface. Authentication headers, contract selectors and host overrides cannot be supplied through per-call headers.
@@ -37,3 +37,27 @@ Only GETs retry automatically: transient transport failures and 429/502/503/504,
 Exact request/response declarations are in [generated.ts](../src/generated.ts), and the bundled [OpenAPI contract](../contracts/openapi.yaml) defines required fields, constraints, and enums. Use server-returned identifiers as opaque strings. `undefined` fields are omitted by JSON serialization; send null only when the field permits it. Unknown REST properties remain JavaScript data; Wiki/source and completion metadata are schema-validated before return, including finite costs and safe integer revisions; other legacy REST annotations are not complete runtime validation. ATP events validate against the exact selected v2/v3 schema. `LegacyAtpUsage` retains numeric v2 costs; `AtpUsage` exposes nullable v3 costs.
 
 `CompatibilityError` reports unsupported contract selection, old-server/version acknowledgment failures and required upgrades. Default v3 requests never silently downgrade. Explicit `getCapabilitiesLegacy` and `streamChatEventsLegacy` require `contractVersion: 2`, which refuses mutations. `uploadSourceFile`, `waitForSource`, `waitForWikiOperation`, `WikiWebhookVerifier` and `PostgresWikiWebhookInbox` are described in [Wiki integration](WIKI.md).
+
+## Native background work
+
+Opt in with `nativeTasks:true`. Native typed models include `NativeDeliveryRequest/Receipt`, `TeamDelegationRequest/Receipt`, `DetachedTaskSnapshot` and `PhaseClassificationRequest/Result`. Use `delegateAndWait` or `waitForDelegatedJob` for full origin-task outcomes, and `taskEvents` for a subscription that survives origin turn completion. See [background workflows](BACKGROUND.md) for negotiated capabilities, signature verification, deduplication and cancellation ownership.
+
+### Completion pages
+
+`client.completions.page({ workspace_id, chat_id, page: 2 })` validates a positive safe integer page. `client.completions.iterate(params, { maxPages: 1000, signal })` yields completions across numeric pages using the normal authenticated GET transport, including retries, contract acknowledgment, errors, timeout and cancellation. It preserves the original filters and API base path. Absolute or relative response links must identify the next page on the same origin and collection path; malformed, cross-origin, credential-bearing and inconsistent links fail closed before a second request. Collection pagination is not a snapshot when records change between pages.
+
+Diagnostic image requests accept `files: Blob[]` (one to four files, at most 10240 KiB each). Use `File` to preserve names; multipart sends actual repeated `files[]` parts, not JSON placeholders.
+
+### Complete optional HTTP validation
+
+`new EnvaiClient({ baseUrl, apiKey, strictValidation: true })` enables canonical request and successful JSON-envelope validation across the reviewed callable SDK operations. Validation runs before preflight or mutations and before response unwrapping, using the actual response status. Canonical optional fields, explicit null, constraints and additive-field rules are preserved. Invalid inputs and responses raise `ProtocolError`; API error envelopes retain their existing typed errors and request identity. This option defaults to false; existing specialized validators remain enabled independently. Multipart validates actual binary values without consuming file content; SSE and downloads use separate stream/binary checks.
+
+Capability discovery retains its compatibility rules in strict mode: valid boolean feature maps normalize to positive feature lists, and future family/feature names remain valid discovery data. Other canonical shape and contract-acknowledgment checks remain enforced.
+
+## Project tenancy cutover
+
+This SDK embeds the complete 146-operation server OpenAPI snapshot but generates only the explicit, reviewed 78-operation SDK allowlist in `scripts/sdk-operations.json`. It does not expose new account, company billing, internal service, or human-session APIs. The three API-key management methods remain discoverable for compatibility but always throw `CompatibilityError` before HTTP, including without a configured bearer key. Use the human console to manage keys.
+
+Use a **project API key**. `Workspace`, `Chat`, `Agent`, and `Team` now expose `project_id` and nullable `created_by_user_id`, not a user owner. `Completion` includes immutable `project_id` and `api_key_id`, while `user_id` is nullable audit provenance. Pre-tenancy v3 payloads are intentionally rejected by current strict validation; frozen v2 historical reads retain their older schema.
+
+Tools are now shared within the key's **project**, not across the creator's projects. Prefer `createProjectTool`, `listProjectTools`, `getProjectTool`, `updateProjectTool`, and `deleteProjectTool`. Deprecated `*UserTool*` method/type aliases remain source-compatible and call the same `/tools` routes, with the new project scope. `client.tools` and definition synchronization use the project-scoped endpoints. No session authentication or CSRF bypass is added.

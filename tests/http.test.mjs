@@ -2,15 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EnvaiClient, operations, HttpTransport, EnvaiError, AuthenticationError, AccessDeniedError, NotFoundError, ConflictError, ValidationError, RateLimitError, ProviderError, FileError, ServerError, TransportError, ProtocolError, retryAfterMs, delay, positive } from '../dist/index.js';
 import {fixture,json,negotiatedFetch,capabilities,turnId} from './helpers.mjs';
-const completion={id:'cmpl_01ARZ3NDEKTSV4RRFFQ69G5FAV',workspace_id:'wsp_01ARZ3NDEKTSV4RRFFQ69G5FAV',chat_id:'cht_01ARZ3NDEKTSV4RRFFQ69G5FAV',team_id:'team_01ARZ3NDEKTSV4RRFFQ69G5FAV',user_id:'usr_01ARZ3NDEKTSV4RRFFQ69G5FAV',models_subagents:[],started_at:'2026-10-13T00:00:00Z',usage:{},cost_usd:null,status:'running',created_at:'2026-10-13T00:00:00Z',updated_at:'2026-10-13T00:00:00Z'};
+const completion={id:'cmpl_01ARZ3NDEKTSV4RRFFQ69G5FAV',workspace_id:'wsp_01ARZ3NDEKTSV4RRFFQ69G5FAV',chat_id:'cht_01ARZ3NDEKTSV4RRFFQ69G5FAV',team_id:'team_01ARZ3NDEKTSV4RRFFQ69G5FAV',project_id:'prj_01ARZ3NDEKTSV4RRFFQ69G5FAV',api_key_id:'key_01ARZ3NDEKTSV4RRFFQ69G5FAV',user_id:null,models_subagents:[],started_at:'2026-10-13T00:00:00Z',usage:{},cost_usd:null,status:'running',created_at:'2026-10-13T00:00:00Z',updated_at:'2026-10-13T00:00:00Z'};
 const baseUrl='https://example.test/api/v1';
 for(const item of fixture('operations.json'))test(`inventory and wire: ${item.id}`,async()=>{
- const operation=operations[item.id];assert.equal(operation.method,item.method);assert.equal(operation.path.replace('/atp/v3',''),item.path);assert.equal(!operation.public,item.authenticated);
+ const operation=operations[item.id.replace('UserTool','ProjectTool')];assert.equal(operation.method,item.method);assert.equal(operation.path.replace('/atp/v3',''),item.path);assert.equal(!operation.public,item.authenticated);
  let seen;
  const client=new EnvaiClient({baseUrl,apiKey:'secret-key',fetch:negotiatedFetch(async(url,init)=>{seen={url,init};return operation.mode==='empty'?new Response(null,{status:204}):operation.mode==='stream'?new Response('data: x\n\n',{headers:{'content-type':'text/event-stream'}}):operation.mode==='binary'?new Response('binary'):json(item.id==='sendChatMessage'?{status:'accepted',turn_id:turnId}:item.id==='getCapabilities'?{...capabilities,object:'list'}:item.id==='getCompletion'?{data:completion}:item.id==='listCompletions'?{data:[],links:{},meta:{current_page:1},object:'list'}:operation.unwrap?{data:{id:'value'}}:{data:[],meta:{current_page:1},object:'list'});},item.id!=='getCapabilities')});
  const params=Object.fromEntries(operation.parameters.filter(p=>p.required).map(p=>[p.name,p.in==='query'?'value':p.name==='name'?'a/b':'id']));
  if(operation.bodyRequired)params.body=operation.bodyMime==='multipart/form-data'?{file:new Blob(['input'],{type:'image/png'})}:{name:'example'};
 
+ if(item.id==='testGenerateImage')params.body={files:[new Blob(['image'],{type:'image/png'})],prompt:'diagnostic',model_code:'model'};
+ if(['createApiKey','listApiKeys','deleteApiKey'].includes(item.id)){await assert.rejects(client[item.id](params),/human console session/);assert.equal(seen,undefined);return;}
  const result=await client[item.id](params);
  assert.equal(seen.init.method,item.method);assert.equal(seen.init.redirect,'manual');assert.equal(seen.init.headers.get('authorization'),item.authenticated?'Bearer secret-key':null);
  const parsed=new URL(seen.url);assert.equal(parsed.origin,'https://example.test');
@@ -26,7 +28,7 @@ for(const item of fixture('operations.json'))test(`inventory and wire: ${item.id
 });
 test('all inventory methods and service aliases available, secrets hidden',()=>{
  const c=new EnvaiClient({baseUrl,apiKey:'do-not-expose'});
- assert.equal(Object.keys(operations).length,71);assert.ok(c.chats.sendMessage&&c.workspaceFiles.convertToPdf&&c.images.models&&c.apiKeys.create);
+ assert.equal(Object.keys(operations).length,78);assert.ok(c.chats.sendMessage&&c.workspaceFiles.convertToPdf&&c.images.models&&c.apiKeys.create);
  assert.ok(!JSON.stringify(c).includes('do-not-expose'));
 });
 test('origin base normalization, prefix preservation, JWKS override and query encoding',async()=>{
@@ -41,10 +43,11 @@ test('artifact signed URL uses Laravel canonical alphabetical query order and no
  await c.downloadArtifact({generation:'igr_x',artifact:'art_x',signature:'abc',expires:123});
  assert.equal(new URL(url).search,'?artifact=art_x&expires=123&generation=igr_x&signature=abc');assert.equal(init.headers.get('authorization'),null);
 });
-test('omitted api-key expiration stays omitted; explicit never preserved',async()=>{
- const bodies=[];const c=new EnvaiClient({baseUrl,fetch:async(_,i)=>{bodies.push(JSON.parse(i.body));return json({data:{}});}});
- await c.apiKeys.create({body:{name:'demo'}});await c.apiKeys.create({body:{name:'demo',expires_at:'never'}});
- assert.ok(!('expires_at'in bodies[0]));assert.equal(bodies[1].expires_at,'never');
+test('API key management is blocked before HTTP with or without bearer and strict validation',async()=>{
+ let calls=0;for(const apiKey of [undefined,'project-secret'])for(const strictValidation of [false,true]){
+  const c=new EnvaiClient({baseUrl,apiKey,strictValidation,fetch:async()=>{calls++;throw Error('unexpected network');}});
+  for(const method of ['create','list','delete'])await assert.rejects(c.apiKeys[method]({body:{name:'demo'},key_id:'key'}),/human console session/);
+ }assert.equal(calls,0);
 });
 for(const [status,type,Klass]of [[401,'unauthenticated',AuthenticationError],[403,'access_denied',AccessDeniedError],[404,'not_found',NotFoundError],[409,'conflict',ConflictError],[400,'invalid_request',ValidationError],[422,'validation_error',ValidationError],[429,'too_many_requests',RateLimitError],[503,'server_error',ServerError],[404,'file_not_found',FileError],[401,'provider_error',ProviderError],[418,'teapot',EnvaiError]])test(`error mapping ${type}`,async()=>{
  const c=new EnvaiClient({baseUrl,retry:{maxRetries:0},fetch:async()=>json({error:{type,code:'machine_code',message:'Problem',details:{field:'x'}}},status,{'x-request-id':'req-1'})});

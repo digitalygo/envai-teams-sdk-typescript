@@ -1,0 +1,92 @@
+{
+  "origin": "Synthetic response fixtures authored from the pinned server OpenAPI resources; not captured production traffic.",
+  "responses": {
+    "Workspace": {
+      "id": "wsp_01j5abcdefghjkmnpqrstvwxyz",
+      "project_id": "prj_01j5abcdefghjkmnpqrstvwxyz",
+      "created_by_user_id": null,
+      "name": "Product analytics",
+      "metadata": {},
+      "created_at": "2026-11-10T00:00:00Z",
+      "updated_at": "2026-11-10T00:00:00Z"
+    },
+    "Chat": {
+      "id": "cht_01j5abcdefghjkmnpqrstvwxyz",
+      "workspace_id": "wsp_01j5abcdefghjkmnpqrstvwxyz",
+      "project_id": "prj_01j5abcdefghjkmnpqrstvwxyz",
+      "created_by_user_id": null,
+      "team_id": "team_01j5abcdefghjkmnpqrstvwxyz",
+      "title": "test",
+      "created_at": "2026-11-10T00:00:00Z",
+      "updated_at": "2026-11-10T00:00:00Z"
+    },
+    "Agent": {
+      "id": "agt_01j5abcdefghjkmnpqrstvwxyz",
+      "project_id": "prj_01j5abcdefghjkmnpqrstvwxyz",
+      "created_by_user_id": null,
+      "name": "researcher",
+      "description": "Research specialist",
+      "system_prompt": "test",
+      "model": "anthropic/claude-sonnet-4-5",
+      "mode": "primary",
+      "tools_enabled": [],
+      "external_tools_enabled": [],
+      "permissions": {},
+      "can_write_knowledge": false,
+      "can_write_skills": false,
+      "config": {},
+      "created_at": "2026-11-10T00:00:00Z",
+      "updated_at": "2026-11-10T00:00:00Z"
+    },
+    "Team": {
+      "id": "team_01j5abcdefghjkmnpqrstvwxyz",
+      "project_id": "prj_01j5abcdefghjkmnpqrstvwxyz",
+      "created_by_user_id": null,
+      "name": "Research team",
+      "description": "test",
+      "orchestrator_id": "agt_01j5abcdefghjkmnpqrstvwxyz",
+      "members": [],
+      "created_at": "2026-11-10T00:00:00Z",
+      "updated_at": "2026-11-10T00:00:00Z"
+    },
+    "Completion": {
+      "id": "cmpl_01j5abcdefghjkmnpqrstvwxyz",
+      "workspace_id": "wsp_01j5abcdefghjkmnpqrstvwxyz",
+      "chat_id": "cht_01j5abcdefghjkmnpqrstvwxyz",
+      "team_id": "team_01j5abcdefghjkmnpqrstvwxyz",
+      "project_id": "prj_01j5abcdefghjkmnpqrstvwxyz",
+      "api_key_id": "key_01j5abcdefghjkmnpqrstvwxyz",
+      "user_id": null,
+      "models_subagents": [
+        "openai/gpt-4o"
+      ],
+      "started_at": "2026-11-10T00:00:00Z",
+      "usage": {},
+      "cost_usd": 0,
+      "status": "running",
+      "created_at": "2026-11-10T00:00:00Z",
+      "updated_at": "2026-11-10T00:00:00Z"
+    },
+    "ProjectTool": {
+      "id": "twl_01j5abcdefghjkmnpqrstvwxyz",
+      "name": "send_email",
+      "kind": "client",
+      "description": "Send an email through the client SMTP server",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "description": "Recipient email"
+          }
+        },
+        "required": [
+          "to"
+        ]
+      },
+      "timeout_seconds": 120,
+      "created_at": "2026-11-10T00:00:00Z",
+      "updated_at": "2026-11-10T00:00:00Z"
+    }
+  }
+}

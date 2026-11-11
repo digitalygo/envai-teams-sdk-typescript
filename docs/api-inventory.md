@@ -1,9 +1,16 @@
 # HTTP operation inventory
 
-Generated contract snapshot: API 3.0.0, 71 operations. Paths are relative to /api/v1 except the two origin-level public JWKS routes. ATP v3, completion and authenticated source/wiki routes require negotiation. Explicit legacy methods require read-only contract 2.
+Full source snapshot: API 3.0.0, 146 server operations. Reviewed SDK allowlist: 78 operations, of which 75 are callable and 3 API-key management compatibility stubs reject before HTTP. New human-session and internal APIs are not generated. Paths are relative to /api/v1 except the two origin-level public JWKS routes. ATP v3, completion and authenticated source/wiki routes require negotiation. Explicit legacy methods require read-only contract 2.
 
 | Operation ID / client method | HTTP | Path | Bearer |
 | --- | --- | --- | --- |
+| deliverWorkflowResult | POST | `/atp/v3/chats/{chat_id}/deliveries` | Yes |
+| delegateToTeam | POST | `/atp/v3/chats/{chat_id}/delegations` | Yes |
+| getDetachedTask | GET | `/atp/v3/chats/{chat_id}/tasks/{task_id}` | Yes |
+| cancelDetachedTask | POST | `/atp/v3/chats/{chat_id}/tasks/{task_id}/cancel` | Yes |
+| classifyPhase | POST | `/atp/v3/chats/{chat_id}/classify-phase` | Yes |
+| classifyChoice | POST | `/atp/v3/chats/{chat_id}/classify-choice` | Yes |
+| startIndependentJob | POST | `/atp/v3/chats/{chat_id}/jobs` | Yes |
 | sendChatMessage | POST | `/atp/v3/chats/{chat_id}/messages` | Yes |
 | streamChatEvents | GET | `/atp/v3/chats/{chat_id}/events` | Yes |
 | cancelChatTurn | POST | `/atp/v3/chats/{chat_id}/cancel` | Yes |
@@ -19,11 +26,11 @@ Generated contract snapshot: API 3.0.0, 71 operations. Paths are relative to /ap
 | listWorkspaces | GET | `/workspaces` | Yes |
 | getWorkspace | GET | `/workspaces/{workspace_id}` | Yes |
 | updateWorkspace | PUT | `/workspaces/{workspace_id}` | Yes |
-| createUserTool | POST | `/tools` | Yes |
-| listUserTools | GET | `/tools` | Yes |
-| getUserTool | GET | `/tools/{name}` | Yes |
-| updateUserTool | PUT | `/tools/{name}` | Yes |
-| deleteUserTool | DELETE | `/tools/{name}` | Yes |
+| createProjectTool | POST | `/tools` | Yes |
+| listProjectTools | GET | `/tools` | Yes |
+| getProjectTool | GET | `/tools/{name}` | Yes |
+| updateProjectTool | PUT | `/tools/{name}` | Yes |
+| deleteProjectTool | DELETE | `/tools/{name}` | Yes |
 | createChat | POST | `/workspaces/{workspace_id}/chats` | Yes |
 | listChats | GET | `/workspaces/{workspace_id}/chats` | Yes |
 | getChat | GET | `/workspaces/{workspace_id}/chats/{chat_id}` | Yes |
@@ -46,9 +53,9 @@ Generated contract snapshot: API 3.0.0, 71 operations. Paths are relative to /ap
 | updateTeam | PUT | `/teams/{team_id}` | Yes |
 | deleteTeam | DELETE | `/teams/{team_id}` | Yes |
 | listModels | GET | `/models` | Yes |
-| createApiKey | POST | `/api-keys` | Yes |
-| listApiKeys | GET | `/api-keys` | Yes |
-| deleteApiKey | DELETE | `/api-keys/{key_id}` | Yes |
+| createApiKey | POST | `/api-keys` | Unsupported: human session + CSRF |
+| listApiKeys | GET | `/api-keys` | Unsupported: human session + CSRF |
+| deleteApiKey | DELETE | `/api-keys/{key_id}` | Unsupported: human session + CSRF |
 | testGenerateImage | POST | `/tests/images/generate` | No |
 | createImageGeneration | POST | `/images/generations` | Yes |
 | getImageGeneration | GET | `/images/generations/{record}` | Yes |

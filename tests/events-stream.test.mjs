@@ -15,7 +15,7 @@ test('unknown fields preserved without caller aliases; inconsistent turn and mal
  const e=event('turn.completed');e.data.turn_id='cmpl_01ARZ3NDEKTSV4RRFFQ69G5FAX';assert.throws(()=>parseEvent(e),/disagrees/);
  assert.equal(isTerminal(parseEvent(event('turn.completed'))),true);assert.equal(isEvent(parseEvent(event('agent.text.delta')),'agent.text.delta'),true);
 });
-test('all 28 declared event types validate through full external-def schema',()=>{
+test('all declared event types validate through full external-def schema',()=>{
  const schema=JSON.parse(readFileSync(new URL('../contracts/events.json',import.meta.url),'utf8'));
  const make=s=>{
   if(s.$ref)return make(schema.$defs[s.$ref.split('/').at(-1)]);
@@ -26,6 +26,7 @@ test('all 28 declared event types validate through full external-def schema',()=
   if(t==='array')return Array.from({length:s.minItems??0},()=>make(s.items));
   if(t==='object'||s.properties)return Object.fromEntries((s.required??[]).map(k=>[k,make(s.properties[k])]));
   if(t==='string'){
+    if(s.pattern==='^[A-Z]{3}$')return 'USD';
     if(s.format==='date-time')return '2026-10-12T22:00:00Z';
     if(s.pattern?.startsWith('^')){const prefix=s.pattern.match(/^\^([a-z]+_)/)?.[1];if(prefix)return prefix+'01ARZ3NDEKTSV4RRFFQ69G5FAV';}
     return 'x'.repeat(s.minLength??1);
@@ -34,8 +35,9 @@ test('all 28 declared event types validate through full external-def schema',()=
  };
  for(const type of knownEventTypes){
   const variant=schema.$defs.Event.oneOf.find(v=>v.allOf?.[1]?.properties?.type?.const===type).allOf[1];
-  const e={...event('turn.started'),v:3,type,data:make(schema.$defs[type]),agent:make(variant.properties.agent)};
+  const e={...event('turn.started'),v:3,type,data:make(schema.$defs[type]),agent:variant.properties.agent?make(variant.properties.agent):null};
   if(type==='ping'){e.seq=0;e.turn_id=null;}
+  if(variant.properties.turn_id?.type==='null')e.turn_id=null;
   if('turn_id'in e.data)e.data.turn_id=e.turn_id;
   assert.equal(parseEvent(e).type,type);
  }

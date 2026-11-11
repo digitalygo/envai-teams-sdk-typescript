@@ -64,7 +64,7 @@ Before running, set `ENVAI_BASE_URL`, `ENVAI_API_KEY`, and an existing `ENVAI_TE
 
 For the harmless echo handler, additionally set `ENVAI_CHAT_ID` and `ENVAI_ACCOUNT_SCOPE`, configure the remote tool/agent as described in [client tools](client-tools.md), then run `node .example-build/examples/client-tools.js`. `ENVAI_REGISTER_TOOLS=1` explicitly opts into first-time remote tool creation. Leave it unset for an already registered tool. The example memory store is not suitable for production side effects.
 
-The PostgreSQL adapter is a library example; supply your own reviewed migration and database connection. No database is created automatically, and CI uses a SQL test double rather than a live database.
+The supported `PostgresToolStateStore` accepts your database connection and uses an explicit reviewed migration. CI exercises it against PostgreSQL 18 and SQL test doubles. Local database tests require `ENVAI_TEST_PG_URL` pointing to a disposable test database; the SDK creates no schema automatically.
 
 ## Offline verification
 

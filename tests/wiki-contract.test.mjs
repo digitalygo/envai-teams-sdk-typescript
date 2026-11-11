@@ -9,7 +9,7 @@ export const wikiFixture = name => JSON.parse(readFileSync(new URL('../testdata/
 const source=wikiFixture('source-accepted').data, operation=wikiFixture('operation-completed').data;
 const baseUrl='https://envai.example/api/v1';
 const clone=structuredClone;
-const completion={id:'cmpl_01ARZ3NDEKTSV4RRFFQ69G5FAV',workspace_id:'wsp_01ARZ3NDEKTSV4RRFFQ69G5FAV',chat_id:chatId,team_id:'team_01ARZ3NDEKTSV4RRFFQ69G5FAV',user_id:'usr_01ARZ3NDEKTSV4RRFFQ69G5FAV',models_subagents:[],started_at:'2026-10-13T00:00:00Z',usage:{},cost_usd:null,status:'running',created_at:'2026-10-13T00:00:00Z',updated_at:'2026-10-13T00:00:00Z'};
+const completion={id:'cmpl_01ARZ3NDEKTSV4RRFFQ69G5FAV',workspace_id:'wsp_01ARZ3NDEKTSV4RRFFQ69G5FAV',chat_id:chatId,team_id:'team_01ARZ3NDEKTSV4RRFFQ69G5FAV',project_id:'prj_01ARZ3NDEKTSV4RRFFQ69G5FAV',api_key_id:'key_01ARZ3NDEKTSV4RRFFQ69G5FAV',user_id:null,models_subagents:[],started_at:'2026-10-13T00:00:00Z',usage:{},cost_usd:null,status:'running',created_at:'2026-10-13T00:00:00Z',updated_at:'2026-10-13T00:00:00Z'};
 
 test('default contract 3 preflight precedes versioned mutation and preserves exact body',async()=>{
  const seen=[];const c=new EnvaiClient({baseUrl,apiKey:'key',fetch:async(u,i)=>{seen.push([u,i]);return json(u.endsWith('/capabilities')?capabilities:{status:'accepted',turn_id:'cmpl_01ARZ3NDEKTSV4RRFFQ69G5FAV'},202);}});
@@ -65,7 +65,7 @@ test('completion reads acknowledge before validation, strict legacy null rejecti
   const read=c.getCompletion({workspace_id:'w',chat_id:'c',completion_id:'d'});
   if(version===2)await assert.rejects(read,ProtocolError);else assert.equal((await read).cost_usd,null);
  }
- const numeric={...completion,cost_usd:0};assert.equal(validateContractValue('Completion',numeric,2).cost_usd,0);
+ const numeric={...completion,user_id:'usr_01ARZ3NDEKTSV4RRFFQ69G5FAV',cost_usd:0};assert.equal(validateContractValue('Completion',numeric,2).cost_usd,0);
  const bad=new EnvaiClient({baseUrl,fetch:async()=>new Response('{"data":null}')});await assert.rejects(bad.getCompletion({workspace_id:'w',chat_id:'c',completion_id:'d'}),CompatibilityError);
  const data={...completion,terminal_snapshot:{event_id:'evt_01ARZ3NDEKTSV4RRFFQ69G5FAV',event_type:'turn.completed',occurred_at:'2026-10-13T00:00:00Z',data:{turn_id:'cmpl_01ARZ3NDEKTSV4RRFFQ69G5FAW'}}};
  assert.throws(()=>validateContractValue('Completion',data),/another turn/);
@@ -205,12 +205,12 @@ test('truncated finite legacy SSE tail is an atomic protocol error',async()=>{
 });
 test('shared schemas match the verified backend Git tree byte-for-byte',async()=>{
  const {createHash}=await import('node:crypto');const manifest=JSON.parse(readFileSync(new URL('../contracts/manifest.json',import.meta.url),'utf8'));
- assert.equal(manifest.commit,'7192fc05ebec817bddc705186c8f195cc0dc5ec5');assert.equal(manifest.operationCount,71);assert.equal(manifest.atpVersion,3);
+ assert.equal(manifest.commit,'964c11fe72887329e8d06c2afb483442d643b290');assert.equal(manifest.operationCount,78);assert.equal(manifest.atpVersion,3);
  assert.equal(manifest.sha256['events-v2.json'],'88d41835f88c0cc4ad071b06ed4623882c6b64144baf312c4a095504c98cd7d6');
  assert.equal(createHash('sha256').update(readFileSync(new URL('../contracts/openapi-v2.json',import.meta.url))).digest('hex'),'bbe7fcc23415e25012fdb88f1931fd8d12a96f7884de8d58c875459a557c5155');
- assert.deepEqual(Object.keys(manifest.sources).sort(),['events-v2.json','events.json','openapi.yaml','terminal-snapshot.json','wiki.json']);
+ assert.deepEqual(Object.keys(manifest.sources).sort(),['events-v2.json','events.json','openapi.yaml','smidja-native.json','terminal-snapshot.json','wiki.json']);
  for(const [name,source]of Object.entries(manifest.sources)){const bytes=readFileSync(new URL('../contracts/'+name,import.meta.url));assert.equal(bytes.length,source.bytes);assert.equal(createHash('sha256').update(bytes).digest('hex'),source.sha256);assert.equal(createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex'),source.git_blob_sha);assert.equal(source.repository_path,'packages/contracts/'+name);}
- const openapi=JSON.parse(readFileSync(new URL('../contracts/openapi.json',import.meta.url),'utf8'));const ids=Object.values(openapi.paths).flatMap(path=>Object.values(path).filter(x=>x?.operationId).map(x=>x.operationId));assert.deepEqual(ids.sort(),Object.keys(operations).sort());
+ const openapi=JSON.parse(readFileSync(new URL('../contracts/openapi.json',import.meta.url),'utf8'));const ids=Object.values(openapi.paths).flatMap(path=>Object.values(path).filter(x=>x?.operationId).map(x=>x.operationId));assert.equal(ids.length,manifest.serverOperationCount);const supported=JSON.parse(readFileSync(new URL('../scripts/sdk-operations.json',import.meta.url)));assert.deepEqual(ids.filter(id=>supported.includes(id)).sort(),Object.keys(operations).sort());assert.deepEqual(manifest.unsupportedOperations,['createApiKey','listApiKeys','deleteApiKey']);
  assert.ok(openapi.components.schemas.ImageGenerationRequest.properties.aspect_ratio.enum.every(x=>typeof x==='string'));
 });
 test('derived OpenAPI and shared attachment fixtures retain separate provenance',async()=>{
@@ -223,18 +223,18 @@ test('derived OpenAPI and shared attachment fixtures retain separate provenance'
   else assert.equal(entry.repository_path,'packages/contracts/fixtures/chat-attachments/'+name);
  }
 });
-test('actual control-plane HTTP payloads hydrate through selected contracts with verified provenance',async()=>{
+test('archived control-plane fixtures retain provenance; pre-tenancy v3 requires migration',async()=>{
  const load=name=>JSON.parse(readFileSync(new URL('../testdata/control-plane-http/'+name+'.json',import.meta.url),'utf8'));
  const cases=[['source','source-headers',3,'getWikiSource',{workspace_id:'w',file_id:'f'}],['completion-pending','completion-headers',3,'getCompletion',{workspace_id:'w',chat_id:'c',completion_id:'t'}],['legacy-completion',null,2,'getCompletion',{workspace_id:'w',chat_id:'c',completion_id:'t'}]];
- for(const [name,headersFile,version,method,params] of cases){const body=load(name);const headers=headersFile?Object.fromEntries(Object.entries(load(headersFile)).map(([key,value])=>[key,Array.isArray(value)?value.join(', '):value])):{'X-Envai-Contract-Version':'2'};const c=new EnvaiClient({baseUrl,contractVersion:version,fetch:async()=>new Response(JSON.stringify(body),{headers})});const decoded=await c[method](params);assert.deepEqual(decoded,body.data);if(name==='completion-pending')assert.equal(decoded.cost_usd,null);}
+ for(const [name,headersFile,version,method,params] of cases){const body=load(name);const headers=headersFile?Object.fromEntries(Object.entries(load(headersFile)).map(([key,value])=>[key,Array.isArray(value)?value.join(', '):value])):{'X-Envai-Contract-Version':'2'};const c=new EnvaiClient({baseUrl,contractVersion:version,fetch:async()=>new Response(JSON.stringify(body),{headers})});if(name==='completion-pending'){await assert.rejects(c[method](params),/project_id/);continue;}const decoded=await c[method](params);assert.deepEqual(decoded,body.data);}
  const provenance=load('provenance');const {createHash}=await import('node:crypto');for(const [file,meta]of Object.entries(provenance.files)){const bytes=readFileSync(new URL('../testdata/control-plane-http/'+file,import.meta.url));assert.equal(bytes.length,meta.bytes);assert.equal(createHash('sha256').update(bytes).digest('hex'),meta.sha256);}
 });
 test('legacy completion nested reserved cost keys remain numeric without discarding unknown usage data',()=>{
  for(const key of ['cost','cost_usd','chat_cost'])for(const cost of [null,'0',-1,Infinity,[],{}]){
-  const record={...completion,cost_usd:0,usage:{agent:{children:[{[key]:cost}]},metadata:{nullable:null}}};
+  const record={...completion,user_id:'usr_01ARZ3NDEKTSV4RRFFQ69G5FAV',cost_usd:0,usage:{agent:{children:[{[key]:cost}]},metadata:{nullable:null}}};
   assert.throws(()=>validateContractValue('Completion',record,2),ProtocolError);
  }
- const record={...completion,cost_usd:0,usage:{agent:{children:[{cost:0,cost_usd:0.25,chat_cost:1}]},metadata:{nullable:null,label:'reserved keys only'}}};
+ const record={...completion,user_id:'usr_01ARZ3NDEKTSV4RRFFQ69G5FAV',cost_usd:0,usage:{agent:{children:[{cost:0,cost_usd:0.25,chat_cost:1}]},metadata:{nullable:null,label:'reserved keys only'}}};
  assert.deepEqual(validateContractValue('Completion',record,2),record);
  const nullable={...record,usage:{agent:{cost_usd:null}}};assert.deepEqual(validateContractValue('Completion',nullable,3),nullable);
 });

@@ -1,0 +1,17 @@
+{
+  "format_version": "1",
+  "baseline": "tooling-golden.json",
+  "status": "normative coordinated safety correction; baseline retained as historical PHP evidence",
+  "overrides": [
+    {
+      "case_id": "adopt_different",
+      "expected": {"report_status": "succeeded", "manifest_ready": false},
+      "rationale": "Adoption records actual remote state without overwriting it. Desired-state readiness would be false when actual differs from desired. No implicit update is permitted."
+    }
+  ],
+  "additional_requirements": [
+    "A blocked or ambiguous real apply invalidates stale readiness; dry-run never writes state.",
+    "Persist uncertain mutation intent before issuing a remote write, so process termination cannot enable a blind duplicate mutation.",
+    "An ambiguous mutation can resolve only through authoritative matching readback (or confirmed absence for delete); missing or differing readback remains blocked even with recreate/overwrite flags."
+  ]
+}
