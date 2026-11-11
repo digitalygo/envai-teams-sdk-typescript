@@ -40,7 +40,7 @@ jobs:
       ENVAI_TEST_MYSQL_DSN: mysql://root:envai-test-only@127.0.0.1:3306/envai_ts_tooling
       ENVAI_TEST_PG_URL: postgres://postgres@127.0.0.1:5432/envai_test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-node@v4
