@@ -37,11 +37,16 @@ test('tenancy synthetic fixture has explicit provenance and verified checksum',(
  const entry=manifest.sdk_fixtures['tenancy-responses.json'];assert.match(entry.origin,/Synthetic/);
  assert.equal(createHash('sha256').update(readFileSync(new URL('../'+entry.snapshot_path,import.meta.url))).digest('hex'),entry.sha256);
 });
-test('reviewed SDK surface cannot silently acquire human or internal operations',()=>{
+test('reviewed SDK surface excludes human-only and financial operations',async()=>{
  const schema=JSON.parse(readFileSync(new URL('../contracts/openapi.json',import.meta.url)));
  const manifest=JSON.parse(readFileSync(new URL('../contracts/manifest.json',import.meta.url)));
- const humanOnly=Object.values(schema.paths).flatMap(item=>Object.values(item)).filter(op=>Object.hasOwn(operations,op.operationId)&&op.security?.length&&!op.security.some(scheme=>Object.hasOwn(scheme,'bearerAuth'))).map(op=>op.operationId);
- assert.deepEqual(humanOnly.sort(),manifest.unsupportedOperations.toSorted());
+ const humanOnly=Object.values(schema.paths).flatMap(item=>Object.values(item)).filter(op=>op.operationId&&op.security?.length&&!op.security.some(scheme=>Object.hasOwn(scheme,'bearerAuth'))).map(op=>op.operationId);
+ const reviewedHumanOnly=humanOnly.filter(id=>Object.hasOwn(operations,id));
+ assert.deepEqual(reviewedHumanOnly.toSorted(),manifest.unsupportedOperations.toSorted());
  const client=new EnvaiClient({baseUrl:'https://offline.test'});
- for(const name of ['login','createCompany','createCompanyBillingTopup','reserveBilling','internalWikiDispatch','updateApiKeySpendLimit','getProjectLogs'])assert.equal(client[name],undefined);
+ const blocked=new Set(manifest.unsupportedOperations);
+ for(const name of humanOnly)if(blocked.has(name))assert.equal(typeof client[name],'function',name);else assert.equal(client[name],undefined,name);
+ for(const name of manifest.unsupportedOperations)await assert.rejects(client[name]({}),/human console session/);
+ for(const name of ['createCompany','getCompanyUsage','getProjectSpendLimit','updateProjectSpendLimit','createCompanyBillingTopup','reserveBilling','internalWikiDispatch','updateApiKeySpendLimit'])assert.equal(client[name],undefined,name);
+ assert.equal(typeof client.getProjectLogs,'function');
 });

@@ -2,8 +2,10 @@ import { validateChoiceRequest, validateNativeCorrelation } from './native-contr
 import type { ChoiceClassificationRequest } from './generated.js';
 import { CompatibilityError, hasCapabilityFeature, validateBackgroundRequest, validateResponse, validateHttpRequest, validateHttpResponse, type ContractVersion } from './contract.js';
 import { apiError, EnvaiError, ProtocolError, TransportError } from './errors.js';
+import { isProjectResourceOperation, prepareProjectLogResponse, validateProjectResourceRequest } from './project-resources.js';
 export type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 export interface RequestOptions { signal?: AbortSignal; headers?: HeadersInit; }
+const repeatedQueryParameters = new Set(['types[]', 'workspace_ids[]', 'api_key_ids[]']);
 export type SourceProcessing = 'convert' | 'original';
 export function sourceProcessing(value: unknown): SourceProcessing {
   if (value === undefined || value === 'convert') return 'convert';
@@ -87,7 +89,10 @@ export class HttpTransport {
   async request<T>(operation: Operation, params: object, options: RequestOptions = {}): Promise<T> {
     if (['createApiKey', 'listApiKeys', 'deleteApiKey'].includes(operation.id)) throw new CompatibilityError('API key management is unsupported by the project-key SDK; use an authenticated human console session with CSRF protection');
     const values = params as Record<string, unknown>;
-    if(this.strictValidation) validateHttpRequest(operation.id, values, this.contractVersion);
+    const projectResource = isProjectResourceOperation(operation.id);
+    if (projectResource && this.contractVersion === 2) throw new CompatibilityError('Contract 2 is historical read-only; project resources require contract 3');
+    if (projectResource) validateProjectResourceRequest(operation.id, values, operation.parameters);
+    if (this.strictValidation || projectResource) validateHttpRequest(operation.id, values, this.contractVersion);
     validateBackgroundRequest(operation.id, values.body);
     if (operation.id === "classifyChoice") validateChoiceRequest(values.body as ChoiceClassificationRequest);
     const sourceMode = operation.id === 'uploadWikiSource' ? sourceProcessing((values.body as { processing?: unknown } | undefined)?.processing) : undefined;
@@ -115,7 +120,18 @@ export class HttpTransport {
       } else if (p.in === 'path') {
         if (String(v) === '.' || String(v) === '..') throw new TypeError('Invalid path segment');
         path = path.replace(`{${p.name}}`, encodeURIComponent(String(v)));
-      } else if (p.in === 'query') query.set(p.name, String(v));
+      } else if (p.in === 'query') {
+        if (Array.isArray(v)) {
+          if (!repeatedQueryParameters.has(p.name) || v.length === 0) throw new TypeError('Invalid repeated query parameter');
+          for (const item of v) {
+            if (typeof item !== 'string') throw new TypeError('Invalid repeated query value');
+            query.append(p.name, String(item));
+          }
+        } else {
+          if (repeatedQueryParameters.has(p.name)) throw new TypeError('Repeated query parameter must be an array');
+          query.set(p.name, String(v));
+        }
+      }
     }
     if (operation.id === 'getWikiCategoryIndex') {
       const all = values.all === true;
@@ -195,6 +211,7 @@ export class HttpTransport {
         if (operation.mode === 'empty') return undefined as T;
         let data: unknown;
         try { data = await response.json(); } catch { throw new ProtocolError('Invalid JSON response'); }
+        data = prepareProjectLogResponse(operation.id, data, values);
         if(this.strictValidation) validateHttpResponse(operation.id,response.status,data,this.contractVersion);
         if (operation.unwrap) {
           if (!data || typeof data !== 'object' || !('data' in data)) throw new ProtocolError('Missing resource data envelope', data);

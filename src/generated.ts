@@ -129,7 +129,7 @@ export type InternalBillingNotice = (InternalBillingCompanyNotice | InternalBill
 export type InternalBillingCompanyNotice = { "id": string; "type": "billing.credit_exhausted"; "reason": string; "scope": "company"; "currency": "EUR" };
 export type InternalBillingScopedNotice = { "id": string; "type": "billing.limit_reached"; "reason": string; "scope": "project" | "api_key"; "currency": "EUR"; "amount": string; "remaining": string; "reset_at"?: string | null };
 export type InternalBillingError = { "error": { "type": "billing_error"; "code": string; "details": (null | { "notice": InternalBillingNotice }) } };
-export type Error = { "error": { "type": "unauthenticated" | "invalid_request" | "not_found" | "conflict" | "validation_error" | "access_denied" | "provider_error" | "server_error" | "internal_error" | "file_not_found" | "file_conflict" | "invalid_path" | "file_too_large" | "file_service_error" | "file_service_unavailable" | "too_many_requests"; "code"?: string | null; "message": string; "details"?: { [key: string]: unknown } | null; [key: string]: unknown }; [key: string]: unknown };
+export type Error = { "error": { "type": "unauthenticated" | "invalid_request" | "not_found" | "conflict" | "validation_error" | "access_denied" | "provider_error" | "provider_configuration_error" | "server_error" | "internal_error" | "file_not_found" | "file_conflict" | "invalid_path" | "file_too_large" | "file_service_error" | "file_service_unavailable" | "too_many_requests"; "code"?: string | null; "message": string; "details"?: { [key: string]: unknown } | null; [key: string]: unknown }; [key: string]: unknown };
 export type ChatCronConflictError = { "error": { "type": "cron_not_active" | "cron_schedule_invalid"; "code": "cron_not_active" | "cron_schedule_invalid"; "message": "The cron request could not be completed." } };
 export type AttachmentManifest = { "attachment_id": string; "original_name": string; "mime_type"?: string; "mode"?: "native"; "revision": number; "sha256": string; "bytes": number; "conversion": { [key: string]: unknown }; [key: string]: unknown };
 export type AttachmentConversion = { "status": "queued" | "running" | "completed" | "failed" | "not_required"; "error_code": string | null; "recoverable": boolean; "next_retry_at": string | null; "retryable": boolean; [key: string]: unknown };
@@ -298,6 +298,8 @@ export type GetWorkspaceParams = { "workspace_id": string };
 export type GetWorkspaceResult = Workspace;
 export type UpdateWorkspaceParams = { "workspace_id": string; body: WorkspaceUpdateRequest };
 export type UpdateWorkspaceResult = Workspace;
+export type DeleteWorkspaceParams = { "workspace_id": string };
+export type DeleteWorkspaceResult = CleanupResult;
 export type CreateProjectToolParams = { body: ProjectToolCreateRequest };
 export type CreateProjectToolResult = ProjectTool;
 export type ListProjectToolsParams = Record<string, never>;
@@ -314,10 +316,22 @@ export type ListChatsParams = { "workspace_id": string };
 export type ListChatsResult = Array<Chat>;
 export type GetChatParams = { "workspace_id": string; "chat_id": string };
 export type GetChatResult = Chat;
+export type UpdateChatParams = { "workspace_id": string; "chat_id": string; body: ChatUpdateRequest };
+export type UpdateChatResult = Chat;
+export type DeleteChatParams = { "workspace_id": string; "chat_id": string };
+export type DeleteChatResult = CleanupResult;
 export type ListCompletionsParams = { "workspace_id": string; "chat_id": string; "status"?: "running" | "succeeded" | "failed" | "canceled"; "model_orchestrator"?: string; "started_at[from]"?: string; "started_at[to]"?: string; "page"?: number; "per_page"?: number };
 export type ListCompletionsResult = CompletionCollection;
 export type GetCompletionParams = { "workspace_id": string; "chat_id": string; "completion_id": string };
 export type GetCompletionResult = Completion;
+export type ListChatCronsParams = { "workspace_id": string; "origin_chat_id"?: string; "status"?: "active" | "completed" };
+export type ListChatCronsResult = Array<ChatCron>;
+export type GetChatCronParams = { "workspace_id": string; "cron_id": string };
+export type GetChatCronResult = ChatCron;
+export type UpdateChatCronParams = { "workspace_id": string; "cron_id": string; body: ChatCronUpdateRequest };
+export type UpdateChatCronResult = ChatCron;
+export type DeleteChatCronParams = { "workspace_id": string; "cron_id": string };
+export type DeleteChatCronResult = void;
 export type IndexWorkspaceFilesParams = { "workspace_id": string; "path": string };
 export type IndexWorkspaceFilesResult = WorkspaceFile;
 export type CreateWorkspaceFileParams = { "workspace_id": string; body: WorkspaceFileRequest };
@@ -410,6 +424,20 @@ export type StreamChatEventsLegacyParams = { "chat_id": string; "after"?: number
 export type StreamChatEventsLegacyResult = Response;
 export type GetCapabilitiesLegacyParams = Record<string, never>;
 export type GetCapabilitiesLegacyResult = CapabilitiesLegacy;
+export type ListProjectSkillsParams = { "project_id": string };
+export type ListProjectSkillsResult = Array<ProjectSkill>;
+export type CreateProjectSkillParams = { "project_id": string; body: ProjectSkillCreateRequest };
+export type CreateProjectSkillResult = ProjectSkill;
+export type GetProjectSkillParams = { "project_id": string; "skill_id": string };
+export type GetProjectSkillResult = ProjectSkill;
+export type UpdateProjectSkillParams = { "project_id": string; "skill_id": string; body: ProjectSkillUpdateRequest };
+export type UpdateProjectSkillResult = ProjectSkill;
+export type DeleteProjectSkillParams = { "project_id": string; "skill_id": string };
+export type DeleteProjectSkillResult = void;
+export type GetProjectUsageParams = { "project_id": string; "from"?: string; "to"?: string; "api_key_id"?: string; "page"?: number; "per_page"?: number };
+export type GetProjectUsageResult = UsageReportCollection;
+export type GetProjectLogsParams = { "project_id": string; "view"?: "events" | "analytics" | "filters"; "from"?: string; "to"?: string; "api_key_id"?: string; "chat_id"?: string; "type"?: string; "types[]"?: Array<string>; "workspace_ids[]"?: Array<string>; "api_key_ids[]"?: Array<string>; "page"?: number; "per_page"?: number };
+export type GetProjectLogsResult = (ProjectLogCollection | ProjectActivityAnalyticsResource | ProjectEventTypeFiltersResource);
 /** @deprecated Use CreateProjectToolParams. */
 export type CreateUserToolParams = CreateProjectToolParams;
 /** @deprecated Use CreateProjectToolResult. */
@@ -476,6 +504,8 @@ export class GeneratedClient {
  getWorkspace(params: GetWorkspaceParams, options: RequestOptions = {}): Promise<GetWorkspaceResult> { return this.transport.request(operations.getWorkspace, params, options); }
  /** Update a workspace */
  updateWorkspace(params: UpdateWorkspaceParams, options: RequestOptions = {}): Promise<UpdateWorkspaceResult> { return this.transport.request(operations.updateWorkspace, params, options); }
+ /** Delete a workspace */
+ deleteWorkspace(params: DeleteWorkspaceParams, options: RequestOptions = {}): Promise<DeleteWorkspaceResult> { return this.transport.request(operations.deleteWorkspace, params, options); }
  /** Register a project client tool */
  createProjectTool(params: CreateProjectToolParams, options: RequestOptions = {}): Promise<CreateProjectToolResult> { return this.transport.request(operations.createProjectTool, params, options); }
  /** List the client tools of the project */
@@ -492,10 +522,22 @@ export class GeneratedClient {
  listChats(params: ListChatsParams, options: RequestOptions = {}): Promise<ListChatsResult> { return this.transport.request(operations.listChats, params, options); }
  /** Get a chat */
  getChat(params: GetChatParams, options: RequestOptions = {}): Promise<GetChatResult> { return this.transport.request(operations.getChat, params, options); }
+ /** Update a chat */
+ updateChat(params: UpdateChatParams, options: RequestOptions = {}): Promise<UpdateChatResult> { return this.transport.request(operations.updateChat, params, options); }
+ /** Delete a chat */
+ deleteChat(params: DeleteChatParams, options: RequestOptions = {}): Promise<DeleteChatResult> { return this.transport.request(operations.deleteChat, params, options); }
  /** List completion metadata of a chat */
  listCompletions(params: ListCompletionsParams, options: RequestOptions = {}): Promise<ListCompletionsResult> { return this.transport.request(operations.listCompletions, params, options); }
  /** Get completion metadata */
  getCompletion(params: GetCompletionParams, options: RequestOptions = {}): Promise<GetCompletionResult> { return this.transport.request(operations.getCompletion, params, options); }
+ /** List chat crons of a workspace */
+ listChatCrons(params: ListChatCronsParams, options: RequestOptions = {}): Promise<ListChatCronsResult> { return this.transport.request(operations.listChatCrons, params, options); }
+ /** Get a chat cron */
+ getChatCron(params: GetChatCronParams, options: RequestOptions = {}): Promise<GetChatCronResult> { return this.transport.request(operations.getChatCron, params, options); }
+ /** Update a chat cron */
+ updateChatCron(params: UpdateChatCronParams, options: RequestOptions = {}): Promise<UpdateChatCronResult> { return this.transport.request(operations.updateChatCron, params, options); }
+ /** Cancel a chat cron */
+ deleteChatCron(params: DeleteChatCronParams, options: RequestOptions = {}): Promise<DeleteChatCronResult> { return this.transport.request(operations.deleteChatCron, params, options); }
  /** Read a workspace file or directory */
  indexWorkspaceFiles(params: IndexWorkspaceFilesParams, options: RequestOptions = {}): Promise<IndexWorkspaceFilesResult> { return this.transport.request(operations.indexWorkspaceFiles, params, options); }
  /** Create a workspace file */
@@ -588,6 +630,20 @@ export class GeneratedClient {
  streamChatEventsLegacy(params: StreamChatEventsLegacyParams, options: RequestOptions = {}): Promise<StreamChatEventsLegacyResult> { return this.transport.request(operations.streamChatEventsLegacy, params, options); }
  /** Advertised protocol metadata */
  getCapabilitiesLegacy(params: GetCapabilitiesLegacyParams = {}, options: RequestOptions = {}): Promise<GetCapabilitiesLegacyResult> { return this.transport.request(operations.getCapabilitiesLegacy, params, options); }
+ /** List project skills */
+ listProjectSkills(params: ListProjectSkillsParams, options: RequestOptions = {}): Promise<ListProjectSkillsResult> { return this.transport.request(operations.listProjectSkills, params, options); }
+ /** Create a project skill */
+ createProjectSkill(params: CreateProjectSkillParams, options: RequestOptions = {}): Promise<CreateProjectSkillResult> { return this.transport.request(operations.createProjectSkill, params, options); }
+ /** Get a project skill */
+ getProjectSkill(params: GetProjectSkillParams, options: RequestOptions = {}): Promise<GetProjectSkillResult> { return this.transport.request(operations.getProjectSkill, params, options); }
+ /** Update a project skill */
+ updateProjectSkill(params: UpdateProjectSkillParams, options: RequestOptions = {}): Promise<UpdateProjectSkillResult> { return this.transport.request(operations.updateProjectSkill, params, options); }
+ /** Delete a project skill */
+ deleteProjectSkill(params: DeleteProjectSkillParams, options: RequestOptions = {}): Promise<DeleteProjectSkillResult> { return this.transport.request(operations.deleteProjectSkill, params, options); }
+ /** Project usage */
+ getProjectUsage(params: GetProjectUsageParams, options: RequestOptions = {}): Promise<GetProjectUsageResult> { return this.transport.request(operations.getProjectUsage, params, options); }
+ /** Project event logs, filters and retained activity analytics */
+ getProjectLogs(params: GetProjectLogsParams, options: RequestOptions = {}): Promise<GetProjectLogsResult> { return this.transport.request(operations.getProjectLogs, params, options); }
  /** @deprecated Use createProjectTool; tools now belong to the key project, not the user. */
  createUserTool(params: CreateProjectToolParams, options: RequestOptions = {}): Promise<CreateProjectToolResult> { return this.createProjectTool(params, options); }
  /** @deprecated Use listProjectTools; tools now belong to the key project, not the user. */
@@ -599,10 +655,13 @@ export class GeneratedClient {
  /** @deprecated Use deleteProjectTool; tools now belong to the key project, not the user. */
  deleteUserTool(params: DeleteProjectToolParams, options: RequestOptions = {}): Promise<DeleteProjectToolResult> { return this.deleteProjectTool(params, options); }
  readonly attachments = { upload: this.uploadChatAttachment.bind(this), list: this.listChatAttachments.bind(this), get: this.getChatAttachment.bind(this), retry: this.retryChatAttachment.bind(this), delete: this.deleteChatAttachment.bind(this), download: this.downloadChatAttachment.bind(this) };
- readonly workspaces = { create: this.createWorkspace.bind(this), list: this.listWorkspaces.bind(this), get: this.getWorkspace.bind(this), update: this.updateWorkspace.bind(this) };
+ readonly workspaces = { create: this.createWorkspace.bind(this), list: this.listWorkspaces.bind(this), get: this.getWorkspace.bind(this), update: this.updateWorkspace.bind(this), delete: this.deleteWorkspace.bind(this) };
  readonly tools = { create: this.createProjectTool.bind(this), list: this.listProjectTools.bind(this), get: this.getProjectTool.bind(this), update: this.updateProjectTool.bind(this), delete: this.deleteProjectTool.bind(this) };
- readonly chats = { create: this.createChat.bind(this), list: this.listChats.bind(this), get: this.getChat.bind(this), sendMessage: this.sendChatMessage.bind(this), eventsResponse: this.streamChatEvents.bind(this), cancel: this.cancelChatTurn.bind(this), steer: this.steerChatTurn.bind(this), submitToolOutput: this.resolveChatTool.bind(this), submitApproval: this.resolveChatApproval.bind(this), deliver: this.deliverWorkflowResult.bind(this), delegate: this.delegateToTeam.bind(this), task: this.getDetachedTask.bind(this), cancelTask: this.cancelDetachedTask.bind(this), classifyPhase: this.classifyPhase.bind(this), classifyChoice: this.classifyChoice.bind(this), startJob: this.startIndependentJob.bind(this), fork: this.forkChat.bind(this), restore: this.restoreChat.bind(this) };
+ readonly chats = { create: this.createChat.bind(this), list: this.listChats.bind(this), get: this.getChat.bind(this), update: this.updateChat.bind(this), delete: this.deleteChat.bind(this), sendMessage: this.sendChatMessage.bind(this), eventsResponse: this.streamChatEvents.bind(this), cancel: this.cancelChatTurn.bind(this), steer: this.steerChatTurn.bind(this), submitToolOutput: this.resolveChatTool.bind(this), submitApproval: this.resolveChatApproval.bind(this), deliver: this.deliverWorkflowResult.bind(this), delegate: this.delegateToTeam.bind(this), task: this.getDetachedTask.bind(this), cancelTask: this.cancelDetachedTask.bind(this), classifyPhase: this.classifyPhase.bind(this), classifyChoice: this.classifyChoice.bind(this), startJob: this.startIndependentJob.bind(this), fork: this.forkChat.bind(this), restore: this.restoreChat.bind(this) };
+ readonly chatCrons = { list: this.listChatCrons.bind(this), get: this.getChatCron.bind(this), update: this.updateChatCron.bind(this), delete: this.deleteChatCron.bind(this) };
  readonly completions = { list: this.listCompletions.bind(this), get: this.getCompletion.bind(this) };
+ readonly projectSkills = { list: this.listProjectSkills.bind(this), create: this.createProjectSkill.bind(this), get: this.getProjectSkill.bind(this), update: this.updateProjectSkill.bind(this), delete: this.deleteProjectSkill.bind(this) };
+ readonly projectReports = { usageRequest: this.getProjectUsage.bind(this), logsRequest: this.getProjectLogs.bind(this) };
  readonly workspaceFiles = { get: this.indexWorkspaceFiles.bind(this), create: this.createWorkspaceFile.bind(this), update: this.updateWorkspaceFile.bind(this), delete: this.deleteWorkspaceFile.bind(this), download: this.downloadWorkspaceFile.bind(this), convertToPdf: this.convertWorkspaceFileToPdf.bind(this), uploadSource: this.uploadWikiSource.bind(this), sourceStatus: this.getWikiSource.bind(this), downloadSource: this.downloadWikiSource.bind(this) };
  readonly agents = { create: this.createAgent.bind(this), list: this.listAgents.bind(this), get: this.getAgent.bind(this), update: this.updateAgent.bind(this), delete: this.deleteAgent.bind(this) };
  readonly teams = { create: this.createTeam.bind(this), list: this.listTeams.bind(this), get: this.getTeam.bind(this), update: this.updateTeam.bind(this), delete: this.deleteTeam.bind(this) };

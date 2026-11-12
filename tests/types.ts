@@ -12,7 +12,14 @@ function consume(event: ATPEvent) {
   if (isEvent(event, 'turn.completed')) { const duration: number = event.data.usage.duration_ms; return duration; }
   return event.type;
 }
-void missingTeam; void wrongAgent; void wrongOutput; void consume;
+function currentEventData(event: ATPEvent) {
+  if (isEvent(event, 'chat.title.updated')) return event.data.title;
+  if (isEvent(event, 'chat.cron.wakeup')) return event.data.prompt;
+  if (isEvent(event, 'billing.limit_reached')) return event.data.scope;
+  if (isEvent(event, 'billing.credit_exhausted')) return event.data.reason;
+  return null;
+}
+void missingTeam; void wrongAgent; void wrongOutput; void consume; void currentEventData;
 
 import { type LegacyAtpUsage, type AtpUsage, type UsageCost, parseEvent, type WikiSource, type WikiWebhookEvent } from '../src/index.js';
 // @ts-expect-error Legacy ATPv2 cost is strictly numeric.
@@ -69,13 +76,22 @@ const oldToolParams: GetUserToolParams = {name:'echo'};
 const newToolParams: GetProjectToolParams = oldToolParams;
 void tenancyTypes; void newToolParams;
 
-// Project log filtering remains outside the reviewed bearer SDK surface.
-// @ts-expect-error Project logs remain outside the reviewed SDK callable surface.
-void client.getProjectLogs;
-
-import { type ProjectEventTypeFilters, type ProjectEventTypeFiltersResource } from '../src/index.js';
+import { type ProjectEventTypeFilters, type ProjectEventTypeFiltersResource, type ProjectUsageFilters, type ProjectEventFilters, type ProjectAnalyticsFilters, type ProjectTypeCatalogFilters, type UsageReportCollection, type ProjectLogCollection, type ProjectActivityAnalytics } from '../src/index.js';
+void client.getProjectLogs({ project_id: 'prj_example', view: 'events', 'types[]': ['chat.created'] });
+const usage: Promise<UsageReportCollection> = client.projectReports.usage('prj_example', { from: '2026-10-01', to: '2026-10-10' });
+const logs: Promise<ProjectLogCollection> = client.projectReports.logsPage('prj_example', 2, { types: ['chat.created'], workspace_ids: ['wsp_example'] });
+const analytics: Promise<ProjectActivityAnalytics> = client.projectReports.analytics('prj_example', { view: 'analytics' });
+const catalog: Promise<ProjectEventTypeFilters> = client.projectReports.filters('prj_example', { view: 'filters' });
+const usageFilters: ProjectUsageFilters = { page: 2, per_page: 25 };
+const eventFilters: ProjectEventFilters = { types: ['chat.created'] };
+const analyticsFilters: ProjectAnalyticsFilters = { view: 'analytics' };
+const catalogFilters: ProjectTypeCatalogFilters = { view: 'filters' };
 const logTypes: ProjectEventTypeFilters = { types: ['chat.created'] };
 const logFilters: ProjectEventTypeFiltersResource = { data: logTypes };
 // @ts-expect-error Filter types are strings, not numeric identifiers.
 const invalidLogTypes: ProjectEventTypeFilters = { types: [7] };
-void logFilters; void invalidLogTypes;
+// @ts-expect-error Project log filter arrays contain strings.
+const invalidEventFilters: ProjectEventFilters = { types: [7] };
+// @ts-expect-error Project log views are finite.
+const invalidCatalogFilters: ProjectTypeCatalogFilters = { view: 'events' };
+void usage; void logs; void analytics; void catalog; void usageFilters; void eventFilters; void analyticsFilters; void catalogFilters; void logFilters; void invalidLogTypes; void invalidEventFilters; void invalidCatalogFilters;

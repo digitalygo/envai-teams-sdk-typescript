@@ -3,6 +3,7 @@ export * from './generated.js';
 export * from './event-types.js';
 export * from './errors.js';
 export * from './events.js';
+export * from './project-resources.js';
 export * from './http.js';
 export * from './stream.js';
 export * from './security.js';

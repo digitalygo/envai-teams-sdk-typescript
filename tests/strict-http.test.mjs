@@ -27,7 +27,7 @@ test('strict multipart checks actual Blob slots before projection and preserves 
  const body={files:[new File(['binary bytes'],'sample.png',{type:'image/png'})],prompt:'test',model_code:'fixture'};await client.testGenerateImage({body});assert.equal(calls,1);
  for(const patch of [{files:['fake']},{files:[]},{prompt:5},{files:[{}]}])await assert.rejects(client.testGenerateImage({body:{...body,...patch}}),ProtocolError);assert.equal(calls,1);
 });
-test('all 78 canonical operations have request and success schema coverage; binary/SSE remain separate',()=>{
+test('all 92 canonical operations have request and success schema coverage; binary/SSE remain separate',()=>{
  const found=new Set();let jsonResponses=0,otherResponses=0;
  for(const item of Object.values(canonical.paths))for(const operation of Object.values(item)){
   if(!Object.hasOwn(operations,operation.operationId))continue;const id=operation.operationId;found.add(id);
@@ -37,7 +37,7 @@ test('all 78 canonical operations have request and success schema coverage; bina
    else{otherResponses++;assert.doesNotThrow(()=>validateHttpResponse(id,Number(status),undefined,3));}
   }
  }
- assert.deepEqual([...found].sort(),Object.keys(operations).sort());assert.equal(found.size,78);assert.equal(jsonResponses,64);assert.ok(otherResponses>0);
+ assert.deepEqual([...found].sort(),Object.keys(operations).sort());assert.equal(found.size,92);assert.equal(jsonResponses,76);assert.ok(otherResponses>0);
  assert.throws(()=>validateHttpRequest('unknown',{},3),ProtocolError);
 });
 test('strict legacy historical CRUD uses its pinned schema and still refuses mutations',async()=>{

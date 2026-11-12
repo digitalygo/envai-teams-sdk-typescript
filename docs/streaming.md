@@ -41,7 +41,6 @@ The parser supports fragmented UTF-8, BOM, CR/LF/CRLF, multi-line data, comments
 
 V3 duplicate sequence numbers are suppressed; finite legacy replay instead rejects duplicate or backwards sequences atomically. An observable live gap triggers one replay recovery attempt from the delivered cursor; a repeated gap raises `ReplayGapError`. Stream retries are bounded (five reconnects by default), jittered, cancellable, and observable. Fatal protocol/authentication errors stop immediately. The default idle timeout is 45 seconds; connection timeout is 15 seconds; `maxDurationMs` is optional. Low-level `chats.cancel` asks the server to cancel a turn; only `turn.cancelled` confirms completion. Local `AbortSignal` cancellation closes this client's work and does **not** implicitly cancel a server turn.
 
-
 ## Recovery limits
 
 ### Current API compatibility
@@ -52,13 +51,11 @@ The bundled contracts describe API 3.0.0 and negotiated ATP v3. Exact source has
 
 - Replay is best-effort, with no durable epoch or cursor-expired response, and sequences can reset after eviction/restart. A reused cursor can silently receive an incomplete tail or only pings. Gap checks cannot detect every reset. Resume is best-effort **within the same resident runtime**; require an application reconciliation policy after known eviction/restart.
 - Replay and live subscription are not atomic. Waiting for the first post-subscription ping reduces the new-turn attach race; it cannot restore already lost events or guarantee every interleaving. Subscriber overflow can silently drop events; observable upward gaps trigger recovery.
-- Capabilities is positive feature discovery, not a parser allowlist. All 29 declared event types remain valid even when discovery lists fewer events.
+- Capabilities is positive feature discovery, not a parser allowlist. All 39 declared event types remain valid even when discovery lists fewer events.
 - A successful `steer` acknowledgement does not guarantee changed execution.
 - Approval resolution currently responds with HTTP 409 and is unavailable as a completed workflow. The primitive preserves that error.
 - Context restore is best-effort. A restore acknowledgement does not guarantee complete or durable history. Reported chat usage can reset and is not a durable billing record.
 - Fork requires a separately created empty destination chat in the same owner/workspace, with both chats idle. Restore returns `turn_id: null` and does not start a turn.
 - Completion pagination omits the `page` request parameter in this contract; empty tool output lacks a schema minimum although the gateway rejects it.
-
-
 
 The `events()` iterator in read-only contract 2 buffers and validates the complete finite replay before yielding any event. A mixed-version/malformed/truncated tail, cancellation or buffer overflow exposes no prefix. `maxLegacySnapshotBytes` defaults to 64 MiB of exact SSE wire bytes and may be configured explicitly; exceeding it fails instead of truncating. Legacy EOF ends iteration with no reconnect. V3 remains incremental. Low-level raw `Response` methods leave parsing to the caller.

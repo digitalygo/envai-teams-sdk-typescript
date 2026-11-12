@@ -10,7 +10,9 @@ const target=mkdtempSync(resolve('.package-smoke-'));
 try{
  execFileSync('tar',['-xzf',pack.filename,'-C',target]);
  const module=await import(pathToFileURL(resolve(target,'package/dist/index.js')));
- if(Object.keys(module.operations).length!==78)throw Error('Packaged inventory mismatch');
+ if(Object.keys(module.operations).length!==92)throw Error('Packaged inventory mismatch');
+ const projectIds=['deleteWorkspace','updateChat','deleteChat','listChatCrons','getChatCron','updateChatCron','deleteChatCron','listProjectSkills','createProjectSkill','getProjectSkill','updateProjectSkill','deleteProjectSkill','getProjectUsage','getProjectLogs'];
+ if(typeof module.PaymentRequiredError!=='function'||typeof module.projectUsageParams!=='function'||typeof module.isProjectResourceOperation!=='function'||projectIds.some(id=>!module.isProjectResourceOperation(id))||module.isProjectResourceOperation('createCompany'))throw Error('Packaged project resources unavailable');
  const test=JSON.parse(readFileSync('testdata/contracts/events-valid.json','utf8'))[0];
  if(module.parseEvent(test).type!=='ping')throw Error('Packaged legacy schema unavailable');
  if(module.parseEvent({...test,v:3}).v!==3)throw Error('Packaged contract 3 schema unavailable');

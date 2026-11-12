@@ -16,6 +16,10 @@ The pinned archive below is the historical pre-Wiki release. Wiki V1 requires an
 
 The archive installs `@digitalygo/envai-client` version `1.0.0-alpha.1`. Prerelease APIs may change; commit your application's lock file and review upgrades deliberately. The release asset's SHA-256 is `a8e8a5b539f2d3a00b27a4ff8643a675859e12a1fa8f78a80bdf63f4ab6f67eb`.
 
+## Current source baseline
+
+The checkout's package manifest is `1.0.0-alpha.5`. That version is the baseline for the working tree, not a new release. Source additions for project resources (cron, project skills, usage and logs, chat rename and deletion) are unreleased; the `v1.0.0-alpha.1` archive above is historical and does not contain them. See [project resources](api-reference.md#project-resources). Build from source or a reviewed commit to use them.
+
 ## Build from public source instead
 
 ```sh
@@ -74,4 +78,3 @@ npm run check:package
 ```
 
 The suite verifies generated files, types, HTTP operations, schemas, SSE, signatures, state transitions, examples, coverage, and a packed-package import. Tests do not contact an Envai deployment or use account credentials. The example tests replace Fetch with offline responses. This verifies client behavior, not your deployment's availability or feature configuration.
-

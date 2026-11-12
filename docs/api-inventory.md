@@ -1,6 +1,6 @@
 # HTTP operation inventory
 
-Full source snapshot: API 3.0.0, 146 server operations. Reviewed SDK allowlist: 78 operations, of which 75 are callable and 3 API-key management compatibility stubs reject before HTTP. New human-session and internal APIs are not generated. Paths are relative to /api/v1 except the two origin-level public JWKS routes. ATP v3, completion and authenticated source/wiki routes require negotiation. Explicit legacy methods require read-only contract 2.
+Full source snapshot: API 3.0.0, 146 server operations, pinned to backend commit `ba021aa61e30e379880f809d45f90e5d3564d43e`. Reviewed SDK allowlist: 92 operations, of which 89 are callable and 3 API-key management compatibility stubs reject before HTTP. Human administration, company financial and internal server operations are not generated. The 14 project-key operations at the end of the table are unreleased source additions; the `1.0.0-alpha.5` manifest is their baseline, not a release that contains them. Project resource operations require contract 3 and reject contract 2 before HTTP. Paths are relative to /api/v1 except the two origin-level public JWKS routes. ATP v3, completion and authenticated source/wiki routes require negotiation. Explicit legacy methods require read-only contract 2.
 
 | Operation ID / client method | HTTP | Path | Bearer |
 | --- | --- | --- | --- |
@@ -82,3 +82,30 @@ Full source snapshot: API 3.0.0, 146 server operations. Reviewed SDK allowlist: 
 | getWikiWebhookJwks | GET | `/.well-known/wiki-webhook-jwks.json` | No |
 | streamChatEventsLegacy | GET | `/chats/{chat_id}/events` | Yes |
 | getCapabilitiesLegacy | GET | `/capabilities` | Yes |
+| deleteWorkspace | DELETE | `/workspaces/{workspace_id}` | Yes |
+| updateChat | PUT | `/workspaces/{workspace_id}/chats/{chat_id}` | Yes |
+| deleteChat | DELETE | `/workspaces/{workspace_id}/chats/{chat_id}` | Yes |
+| listChatCrons | GET | `/workspaces/{workspace_id}/crons` | Yes |
+| getChatCron | GET | `/workspaces/{workspace_id}/crons/{cron_id}` | Yes |
+| updateChatCron | PATCH | `/workspaces/{workspace_id}/crons/{cron_id}` | Yes |
+| deleteChatCron | DELETE | `/workspaces/{workspace_id}/crons/{cron_id}` | Yes |
+| listProjectSkills | GET | `/projects/{project_id}/skills` | Yes |
+| createProjectSkill | POST | `/projects/{project_id}/skills` | Yes |
+| getProjectSkill | GET | `/projects/{project_id}/skills/{skill_id}` | Yes |
+| updateProjectSkill | PUT | `/projects/{project_id}/skills/{skill_id}` | Yes |
+| deleteProjectSkill | DELETE | `/projects/{project_id}/skills/{skill_id}` | Yes |
+| getProjectUsage | GET | `/projects/{project_id}/usage` | Yes |
+| getProjectLogs | GET | `/projects/{project_id}/logs` | Yes |
+
+## Project resource operations
+
+The 14 operations above add workspace and chat deletion, chat rename, four chat cron operations, five project skill operations and two project reports. Their success statuses are:
+
+| Operation group | Success behavior |
+| --- | --- |
+| `deleteWorkspace`, `deleteChat` | `200` with the deletion outcome and its pending cleanup intents. Access is cut at once; this is not proof of physical purge. |
+| `deleteChatCron`, `deleteProjectSkill` | `204`, returned as `undefined`. |
+| `createProjectSkill` | `201` with the created skill. |
+| Other operations | `200`. |
+
+Read [API reference](api-reference.md#project-resources) for validation, report helpers, pagination and error behavior.
