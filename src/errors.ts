@@ -6,6 +6,7 @@ export class EnvaiError extends Error {
   }
 }
 export class AuthenticationError extends EnvaiError {}
+export class PaymentRequiredError extends EnvaiError {}
 export class AccessDeniedError extends EnvaiError {}
 export class NotFoundError extends EnvaiError {}
 export class ConflictError extends EnvaiError {}
@@ -25,7 +26,7 @@ export function apiError(status: number, body: unknown, requestId: string | null
   const root = body && typeof body === 'object' ? body as Record<string, unknown> : {};
   const err = root.error && typeof root.error === 'object' ? root.error as Record<string, unknown> : {};
   const type = typeof err.type === 'string' ? err.type : 'http_error';
-  const Klass = type.startsWith('file_') ? FileError : type === 'provider_error' ? ProviderError
+  const Klass = status === 402 ? PaymentRequiredError : type.startsWith('file_') ? FileError : type === 'provider_error' ? ProviderError
     : status === 401 ? AuthenticationError : status === 403 ? AccessDeniedError : status === 404 ? NotFoundError
     : status === 409 ? ConflictError : status === 422 || status === 400 ? ValidationError
     : status === 429 ? RateLimitError : status >= 500 ? ServerError : EnvaiError;

@@ -1,5 +1,6 @@
-import { GeneratedClient, type ChatMessageRequest, type ImageGenerationRequest, type TeamDelegationRequest, type TeamDelegationReceipt, type DetachedTaskSnapshot, type ListCompletionsParams, type CompletionCollection, type Completion } from './generated.js';
+import { GeneratedClient, type ChatMessageRequest, type ImageGenerationRequest, type TeamDelegationRequest, type TeamDelegationReceipt, type DetachedTaskSnapshot, type ListCompletionsParams, type CompletionCollection, type Completion, type UsageReportCollection, type UsageReportDay, type ProjectLogCollection, type ProjectLogEntry, type ProjectActivityAnalytics, type ProjectActivityAnalyticsResource, type ProjectEventTypeFilters, type ProjectEventTypeFiltersResource } from './generated.js';
 import { HttpTransport, delay, positive, type ClientOptions, type RequestOptions } from './http.js';
+import { projectLogParams, projectUsageParams, type ProjectAnalyticsFilters, type ProjectEventFilters, type ProjectReportIterationOptions, type ProjectTypeCatalogFilters, type ProjectUsageFilters } from './project-resources.js';
 import { operations } from './operations.js';
 import { EventStream, type StreamOptions } from './stream.js';
 import { isEvent, isTerminal } from './events.js';
@@ -14,6 +15,14 @@ export interface CompletionIterationOptions extends RequestOptions { maxPages?: 
 export interface TurnOptions extends StreamOptions { toolRunner?: ClientToolRunner; readyTimeoutMs?: number; idempotencyKey?: string; }
 function isToolRequest(event: ATPEvent): boolean {
   return isEvent(event, 'agent.tool.request') || isEvent(event, 'task.event') && event.data.event_type === 'agent.tool.request';
+}
+function iterationBound(value: number, name: string): number {
+  if (!Number.isSafeInteger(value) || value < 1) throw new RangeError(`${name} must be a positive safe integer`);
+  return value;
+}
+function assertReportPage(meta: UsageReportCollection['meta'] | ProjectLogCollection['meta'], page: number, label: string): void {
+  const last = meta.last_page;
+  if (meta.current_page !== page || typeof last !== 'number' || !Number.isSafeInteger(last) || last < page) throw new ProtocolError(`${label} pagination did not advance as requested`);
 }
 async function acceptReplay(events: ATPEvent[], runner?: ClientToolRunner): Promise<void> {
   // Establish all replayed resolution/terminal barriers before admitting any effects.
@@ -71,6 +80,14 @@ export class EnvaiClient extends GeneratedClient {
   override readonly completions = {
     list: this.listCompletions.bind(this), get: this.getCompletion.bind(this),
     page: this.listCompletionPage.bind(this), iterate: this.iterateCompletions.bind(this),
+  };
+  override readonly projectReports = {
+    usageRequest: this.getProjectUsage.bind(this), logsRequest: this.getProjectLogs.bind(this),
+    usage: this.projectUsage.bind(this), usagePage: this.projectUsagePage.bind(this), iterateUsage: this.iterateProjectUsage.bind(this),
+    logs: this.projectLogs.bind(this), events: this.projectLogs.bind(this),
+    logsPage: this.projectLogsPage.bind(this), eventsPage: this.projectLogsPage.bind(this),
+    iterateLogs: this.iterateProjectLogs.bind(this), iterateEvents: this.iterateProjectLogs.bind(this),
+    analytics: this.projectAnalytics.bind(this), filters: this.projectFilters.bind(this), eventTypes: this.projectFilters.bind(this),
   };
   createWikiWebhookVerifier(workspaceId: string): WikiWebhookVerifier {
     return new WikiWebhookVerifier(new JwksCache(async signal => await this.getWikiWebhookJwks({}, { signal }) as SigningJwks), workspaceId);
@@ -267,5 +284,49 @@ export class EnvaiClient extends GeneratedClient {
         await delay(positive(options.pollIntervalMs ?? 1_000, 'pollIntervalMs'), signal);
       }
     } finally { clearTimeout(timer); }
+  }
+  projectUsage(projectId: string, filters: ProjectUsageFilters = {}, options: RequestOptions = {}): Promise<UsageReportCollection> {
+    return this.getProjectUsage(projectUsageParams(projectId, filters), options);
+  }
+  projectUsagePage(projectId: string, page = 1, filters: ProjectUsageFilters = {}, options: RequestOptions = {}): Promise<UsageReportCollection> {
+    return this.getProjectUsage(projectUsageParams(projectId, filters, page), options);
+  }
+  async projectLogs(projectId: string, filters: ProjectEventFilters = {}, options: RequestOptions = {}): Promise<ProjectLogCollection> {
+    return await this.getProjectLogs(projectLogParams(projectId, filters, 'events'), options) as ProjectLogCollection;
+  }
+  async projectLogsPage(projectId: string, page = 1, filters: ProjectEventFilters = {}, options: RequestOptions = {}): Promise<ProjectLogCollection> {
+    return await this.getProjectLogs(projectLogParams(projectId, filters, 'events', page), options) as ProjectLogCollection;
+  }
+  async projectAnalytics(projectId: string, filters: ProjectAnalyticsFilters = {}, options: RequestOptions = {}): Promise<ProjectActivityAnalytics> {
+    const result = await this.getProjectLogs(projectLogParams(projectId, filters, 'analytics'), options) as ProjectActivityAnalyticsResource;
+    return result.data;
+  }
+  async projectFilters(projectId: string, filters: ProjectTypeCatalogFilters = {}, options: RequestOptions = {}): Promise<ProjectEventTypeFilters> {
+    const result = await this.getProjectLogs(projectLogParams(projectId, filters, 'filters'), options) as ProjectEventTypeFiltersResource;
+    return result.data;
+  }
+  async *iterateProjectUsage(projectId: string, filters: ProjectUsageFilters = {}, options: ProjectReportIterationOptions = {}): AsyncGenerator<UsageReportDay> {
+    const maxPages = iterationBound(options.maxPages ?? 1_000, 'maxPages');
+    let page = iterationBound(options.startPage ?? filters.page ?? 1, 'startPage');
+    for (let count = 0; count < maxPages; count++, page++) {
+      options.signal?.throwIfAborted();
+      const result = await this.projectUsagePage(projectId, page, filters, options);
+      assertReportPage(result.meta, page, 'Usage');
+      for (const item of result.data) { options.signal?.throwIfAborted(); yield item; }
+      if (page >= result.meta.last_page!) return;
+    }
+    throw new ProtocolError('Usage pagination exceeded maxPages');
+  }
+  async *iterateProjectLogs(projectId: string, filters: ProjectEventFilters = {}, options: ProjectReportIterationOptions = {}): AsyncGenerator<ProjectLogEntry> {
+    const maxPages = iterationBound(options.maxPages ?? 1_000, 'maxPages');
+    let page = iterationBound(options.startPage ?? filters.page ?? 1, 'startPage');
+    for (let count = 0; count < maxPages; count++, page++) {
+      options.signal?.throwIfAborted();
+      const result = await this.projectLogsPage(projectId, page, filters, options);
+      assertReportPage(result.meta, page, 'Project log');
+      for (const item of result.data) { options.signal?.throwIfAborted(); yield item; }
+      if (page >= result.meta.last_page!) return;
+    }
+    throw new ProtocolError('Project log pagination exceeded maxPages');
   }
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { EnvaiClient, operations, HttpTransport, EnvaiError, AuthenticationError, AccessDeniedError, NotFoundError, ConflictError, ValidationError, RateLimitError, ProviderError, FileError, ServerError, TransportError, ProtocolError, retryAfterMs, delay, positive } from '../dist/index.js';
+import { EnvaiClient, operations, HttpTransport, EnvaiError, AuthenticationError, PaymentRequiredError, AccessDeniedError, NotFoundError, ConflictError, ValidationError, RateLimitError, ProviderError, FileError, ServerError, TransportError, ProtocolError, retryAfterMs, delay, positive } from '../dist/index.js';
 import {fixture,json,negotiatedFetch,capabilities,turnId} from './helpers.mjs';
 const completion={id:'cmpl_01ARZ3NDEKTSV4RRFFQ69G5FAV',workspace_id:'wsp_01ARZ3NDEKTSV4RRFFQ69G5FAV',chat_id:'cht_01ARZ3NDEKTSV4RRFFQ69G5FAV',team_id:'team_01ARZ3NDEKTSV4RRFFQ69G5FAV',project_id:'prj_01ARZ3NDEKTSV4RRFFQ69G5FAV',api_key_id:'key_01ARZ3NDEKTSV4RRFFQ69G5FAV',user_id:null,models_subagents:[],started_at:'2026-10-13T00:00:00Z',usage:{},cost_usd:null,status:'running',created_at:'2026-10-13T00:00:00Z',updated_at:'2026-10-13T00:00:00Z'};
 const baseUrl='https://example.test/api/v1';
@@ -28,7 +28,7 @@ for(const item of fixture('operations.json'))test(`inventory and wire: ${item.id
 });
 test('all inventory methods and service aliases available, secrets hidden',()=>{
  const c=new EnvaiClient({baseUrl,apiKey:'do-not-expose'});
- assert.equal(Object.keys(operations).length,78);assert.ok(c.chats.sendMessage&&c.workspaceFiles.convertToPdf&&c.images.models&&c.apiKeys.create);
+ assert.equal(Object.keys(operations).length,92);assert.ok(c.chats.sendMessage&&c.chats.update&&c.workspaceFiles.convertToPdf&&c.workspaces.delete&&c.chatCrons.list&&c.projectSkills.create&&c.projectReports.usage&&c.images.models&&c.apiKeys.create);
  assert.ok(!JSON.stringify(c).includes('do-not-expose'));
 });
 test('origin base normalization, prefix preservation, JWKS override and query encoding',async()=>{
@@ -49,9 +49,19 @@ test('API key management is blocked before HTTP with or without bearer and stric
   for(const method of ['create','list','delete'])await assert.rejects(c.apiKeys[method]({body:{name:'demo'},key_id:'key'}),/human console session/);
  }assert.equal(calls,0);
 });
-for(const [status,type,Klass]of [[401,'unauthenticated',AuthenticationError],[403,'access_denied',AccessDeniedError],[404,'not_found',NotFoundError],[409,'conflict',ConflictError],[400,'invalid_request',ValidationError],[422,'validation_error',ValidationError],[429,'too_many_requests',RateLimitError],[503,'server_error',ServerError],[404,'file_not_found',FileError],[401,'provider_error',ProviderError],[418,'teapot',EnvaiError]])test(`error mapping ${type}`,async()=>{
+for(const [status,type,Klass]of [[401,'unauthenticated',AuthenticationError],[402,'payment_required',PaymentRequiredError],[402,'provider_error',PaymentRequiredError],[403,'access_denied',AccessDeniedError],[404,'not_found',NotFoundError],[409,'conflict',ConflictError],[400,'invalid_request',ValidationError],[422,'validation_error',ValidationError],[429,'too_many_requests',RateLimitError],[503,'server_error',ServerError],[404,'file_not_found',FileError],[401,'provider_error',ProviderError],[418,'teapot',EnvaiError]])test(`error mapping ${type}`,async()=>{
  const c=new EnvaiClient({baseUrl,retry:{maxRetries:0},fetch:async()=>json({error:{type,code:'machine_code',message:'Problem',details:{field:'x'}}},status,{'x-request-id':'req-1'})});
  await assert.rejects(c.getWorkspace({workspace_id:'x'}),e=>e instanceof Klass&&e.httpStatus===status&&e.type===type&&e.code==='machine_code'&&e.requestId==='req-1'&&e.details.field==='x');
+});
+test('payment refusal preserves fields and never retries a mutation',async()=>{
+ let calls=0;const c=new EnvaiClient({baseUrl,retry:{maxRetries:3,baseDelayMs:0},fetch:async()=>{calls++;return json({error:{type:'payment_required',code:'credit_exhausted',message:'Insufficient credit',details:{scope:'company'}}},402,{'x-request-id':'req-payment'});}});
+ await assert.rejects(c.createWorkspace({body:{name:'example'}}),e=>e instanceof PaymentRequiredError&&e instanceof EnvaiError&&e.httpStatus===402&&e.code==='credit_exhausted'&&e.details.scope==='company'&&e.requestId==='req-payment');
+ assert.equal(calls,1);
+});
+test('provider configuration errors remain typed server errors and never retry mutations',async()=>{
+ let calls=0;const c=new EnvaiClient({baseUrl,retry:{maxRetries:3,baseDelayMs:0},fetch:async()=>{calls++;return json({error:{type:'provider_configuration_error',code:'provider_configuration_error',message:'Provider unavailable',details:null}},503,{'x-request-id':'req-provider'});}});
+ await assert.rejects(c.createImageGeneration({body:{prompt:'example'}}),e=>e instanceof ServerError&&e.httpStatus===503&&e.code==='provider_configuration_error'&&e.type==='provider_configuration_error'&&e.requestId==='req-provider');
+ assert.equal(calls,1);
 });
 test('non-envelope/invalid JSON errors are safe and preserve HTTP status',async()=>{
  const c=new EnvaiClient({baseUrl,fetch:async()=>new Response('<html>secret request url</html>',{status:401})});

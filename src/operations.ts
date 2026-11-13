@@ -487,6 +487,23 @@ export const operations = {
     "mode": "json",
     "unwrap": true
   },
+  "deleteWorkspace": {
+    "id": "deleteWorkspace",
+    "method": "DELETE",
+    "path": "/workspaces/{workspace_id}",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": true
+  },
   "createProjectTool": {
     "id": "createProjectTool",
     "method": "POST",
@@ -646,6 +663,51 @@ export const operations = {
     "mode": "json",
     "unwrap": true
   },
+  "updateChat": {
+    "id": "updateChat",
+    "method": "PUT",
+    "path": "/workspaces/{workspace_id}/chats/{chat_id}",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "chat_id",
+        "in": "path",
+        "required": true
+      }
+    ],
+    "bodyMime": "application/json",
+    "bodyRequired": true,
+    "mode": "json",
+    "unwrap": true
+  },
+  "deleteChat": {
+    "id": "deleteChat",
+    "method": "DELETE",
+    "path": "/workspaces/{workspace_id}/chats/{chat_id}",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "chat_id",
+        "in": "path",
+        "required": true
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": true
+  },
   "listCompletions": {
     "id": "listCompletions",
     "method": "GET",
@@ -734,6 +796,120 @@ export const operations = {
     "bodyRequired": false,
     "mode": "json",
     "unwrap": true
+  },
+  "listChatCrons": {
+    "id": "listChatCrons",
+    "method": "GET",
+    "path": "/workspaces/{workspace_id}/crons",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      },
+      {
+        "name": "origin_chat_id",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "status",
+        "in": "query",
+        "required": false
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": true
+  },
+  "getChatCron": {
+    "id": "getChatCron",
+    "method": "GET",
+    "path": "/workspaces/{workspace_id}/crons/{cron_id}",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      },
+      {
+        "name": "cron_id",
+        "in": "path",
+        "required": true
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": true
+  },
+  "updateChatCron": {
+    "id": "updateChatCron",
+    "method": "PATCH",
+    "path": "/workspaces/{workspace_id}/crons/{cron_id}",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      },
+      {
+        "name": "cron_id",
+        "in": "path",
+        "required": true
+      }
+    ],
+    "bodyMime": "application/json",
+    "bodyRequired": true,
+    "mode": "json",
+    "unwrap": true
+  },
+  "deleteChatCron": {
+    "id": "deleteChatCron",
+    "method": "DELETE",
+    "path": "/workspaces/{workspace_id}/crons/{cron_id}",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "workspace_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      },
+      {
+        "name": "cron_id",
+        "in": "path",
+        "required": true
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "empty",
+    "unwrap": false
   },
   "indexWorkspaceFiles": {
     "id": "indexWorkspaceFiles",
@@ -1826,6 +2002,232 @@ export const operations = {
       {
         "name": "X-Envai-Contract-Version",
         "in": "header",
+        "required": false
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": false
+  },
+  "listProjectSkills": {
+    "id": "listProjectSkills",
+    "method": "GET",
+    "path": "/projects/{project_id}/skills",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "project_id",
+        "in": "path",
+        "required": true
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": true
+  },
+  "createProjectSkill": {
+    "id": "createProjectSkill",
+    "method": "POST",
+    "path": "/projects/{project_id}/skills",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "project_id",
+        "in": "path",
+        "required": true
+      }
+    ],
+    "bodyMime": "application/json",
+    "bodyRequired": true,
+    "mode": "json",
+    "unwrap": true
+  },
+  "getProjectSkill": {
+    "id": "getProjectSkill",
+    "method": "GET",
+    "path": "/projects/{project_id}/skills/{skill_id}",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "project_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "skill_id",
+        "in": "path",
+        "required": true
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": true
+  },
+  "updateProjectSkill": {
+    "id": "updateProjectSkill",
+    "method": "PUT",
+    "path": "/projects/{project_id}/skills/{skill_id}",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "project_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "skill_id",
+        "in": "path",
+        "required": true
+      }
+    ],
+    "bodyMime": "application/json",
+    "bodyRequired": true,
+    "mode": "json",
+    "unwrap": true
+  },
+  "deleteProjectSkill": {
+    "id": "deleteProjectSkill",
+    "method": "DELETE",
+    "path": "/projects/{project_id}/skills/{skill_id}",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "project_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "skill_id",
+        "in": "path",
+        "required": true
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "empty",
+    "unwrap": false
+  },
+  "getProjectUsage": {
+    "id": "getProjectUsage",
+    "method": "GET",
+    "path": "/projects/{project_id}/usage",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "project_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      },
+      {
+        "name": "from",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "to",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "api_key_id",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "page",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "per_page",
+        "in": "query",
+        "required": false
+      }
+    ],
+    "bodyRequired": false,
+    "mode": "json",
+    "unwrap": false
+  },
+  "getProjectLogs": {
+    "id": "getProjectLogs",
+    "method": "GET",
+    "path": "/projects/{project_id}/logs",
+    "public": false,
+    "origin": false,
+    "parameters": [
+      {
+        "name": "project_id",
+        "in": "path",
+        "required": true
+      },
+      {
+        "name": "X-Envai-Project-Id",
+        "in": "header",
+        "required": false
+      },
+      {
+        "name": "view",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "from",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "to",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "api_key_id",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "chat_id",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "type",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "types[]",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "workspace_ids[]",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "api_key_ids[]",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "page",
+        "in": "query",
+        "required": false
+      },
+      {
+        "name": "per_page",
+        "in": "query",
         "required": false
       }
     ],

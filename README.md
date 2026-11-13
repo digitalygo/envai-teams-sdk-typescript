@@ -1,8 +1,10 @@
 # Envai Teams TypeScript SDK
 
-A Node.js 22+ ESM client for the current Envai Teams **alpha** API. It includes typed primitives for a reviewed **78-operation HTTP surface** (75 callable operations plus 3 unsupported API-key compatibility stubs), all **39 ATP event types**, async SSE streams, turn helpers, and opt-in signed client tools.
+A Node.js 22+ ESM client for the current Envai Teams **alpha** API. It includes typed primitives for a reviewed **92-operation HTTP surface** (89 callable operations plus 3 unsupported API-key compatibility stubs), all **39 ATP event types**, async SSE streams, turn helpers, and opt-in signed client tools.
 
 **Status:** alpha prerelease available as a [GitHub release archive](https://github.com/digitalygo/envai-teams-sdk-typescript/releases/tag/v1.0.0-alpha.1). The package is not currently published to the npm registry. Prerelease APIs may change; review upgrades deliberately. API compatibility limits are described below.
+
+The working tree is based on the `1.0.0-alpha.5` manifest, which is a baseline and not a new release. The project resource additions described under [Project resources](#project-resources) are unreleased source changes; nothing here claims they are pushed or published. The archive links below stay historical and do not contain these features.
 
 - [Installation and configuration](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/getting-started.md)
 - [API and models](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-reference.md) · [reviewed SDK operations](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-inventory.md)
@@ -62,7 +64,7 @@ See [typed quickstart](https://github.com/digitalygo/envai-teams-sdk-typescript/
 
 ## API and generated types
 
-Every operation in the reviewed SDK allowlist is a public method, for example `client.sendChatMessage({ chat_id, body: { message } })`. Service aliases provide `workspaces`, `tools`, `chats`, `completions`, `workspaceFiles`, `agents`, `teams`, `apiKeys`, `models`, `images`, and `capabilities`.
+Every operation in the reviewed SDK allowlist is a public method, for example `client.sendChatMessage({ chat_id, body: { message } })`. Service aliases provide `workspaces`, `tools`, `chats`, `chatCrons`, `completions`, `projectSkills`, `projectReports`, `workspaceFiles`, `agents`, `teams`, `apiKeys`, `models`, `images`, and `capabilities`.
 
 - Request fields preserve the contract's snake_case names; runtime options use camelCase.
 - Path/query parameters are fields of the parameter object. JSON and multipart input go under `body`.
@@ -72,7 +74,7 @@ Every operation in the reviewed SDK allowlist is a public method, for example `c
 - Optional provider webhook signature headers go in `RequestOptions.headers`. The webhook primitive is exposed for complete contract coverage; the SDK never calls it automatically.
 - `downloadArtifact` takes current signed `artifact`, `generation`, optional `expires`, and `signature` query fields, in canonical alphabetical order, without a bearer token. It does not accept the historical `path` parameter. Do not log signed URLs.
 - API-key create/list/revoke methods are compatibility stubs that reject before HTTP. Key management requires an authenticated human console session with CSRF protection.
-- Completion `page` is absent from the pinned request contract, although the response is paginated. This SDK preserves the declared parameters and metadata; it does not invent an automatic page traversal API.
+- Completion `page` is a typed positive safe integer selector, and `client.completions.iterate` traverses numeric pages.
 
 [Complete operation inventory](https://github.com/digitalygo/envai-teams-sdk-typescript/blob/alpha/docs/api-inventory.md) and generated `*Params`/`*Result` types document the full surface. Authentication headers and host overrides cannot be supplied through per-call headers.
 
@@ -114,6 +116,36 @@ A stream permits one consumer. Break iteration or call `stream.close()` for dete
 The parser supports fragmented UTF-8, BOM, CR/LF/CRLF, multi-line data, comments, and unknown SSE fields. It validates full ATP envelopes and known payloads against the pinned JSON Schema. Unknown additive event types remain accessible with `known: false`; use `isEvent` for typed narrowing. Unsupported versions, malformed known payloads, wrong-chat events, inconsistent turn IDs, and unsafe sequence integers fail closed. `ProtocolError.raw` is diagnostic data and can contain private content; do not log it indiscriminately.
 
 V3 duplicate sequence numbers are suppressed; finite legacy replay instead rejects duplicate or backwards sequences atomically. An observable live gap triggers one replay recovery attempt from the delivered cursor; a repeated gap raises `ReplayGapError`. Stream retries are bounded (five reconnects by default), jittered, cancellable, and observable. Fatal protocol/authentication errors stop immediately. The default idle timeout is 45 seconds; connection timeout is 15 seconds; `maxDurationMs` is optional. Low-level `chats.cancel` asks the server to cancel a turn; only `turn.cancelled` confirms completion. Local `AbortSignal` cancellation closes this client's work and does **not** implicitly cancel a server turn.
+
+## Per-turn model selection
+
+Unreleased source, verified with offline tests and fake providers only. The contracts are fixed at `digitalygo/envai-teams` commit `f970714c0a358ff94b14f15eabde197c55861e74`; that is a source pin, not a claim about any deployed server.
+
+Set `model` in the message body to pin the root orchestrator model for that one turn. `sendChatMessage`, `sendAndStream` and `sendAndWait` all take it:
+
+```ts
+const models = await client.listModels();
+const model = models.data.find((entry) => entry.type === 'llm' && entry.selectable)?.id;
+if (!model) throw new Error('No model reported as selectable');
+
+const result = await client.sendAndWait(
+  chat.id,
+  { message: 'Summarize the project.', model },
+  { idempotencyKey: 'summary-1' },
+);
+const next = await client.sendAndWait(chat.id, { message: 'And the risks?' });
+```
+
+- Use an exact, case-sensitive `id` copied from an `llm` entry of `GET /models`. The SDK does not trim, fold case, translate aliases or prefetch the catalog. It has no client-side model list and no allowlist.
+- `selectable` is guidance and `selectable: false` is retained as received. It is not a permission gate: the SDK sends the model anyway and the server decides.
+- The model applies to that turn's root only. It never changes team, agent, chat or default configuration, and it is not carried to later calls. Omitting `model` returns to the normal configured cascade.
+- Omit the property for no selection. A raw `null`, a non-string, an empty or a padded value is never turned into omission or a fallback: it is sent as written and the server answers `422 invalid_model`, or with `strictValidation: true` the SDK throws `ProtocolError` before message submission (no message POST is sent; read requests such as opening the live stream can precede validation).
+- An explicit `model` needs no native tasks or `strict_model`. If you also set `strict_model: true`, its existing gates (`nativeTasks` and the advertised `strict_model` feature) apply (`strict_model: false` is not gated). Whether `strict_model` is omitted, `false` or `true`, an explicit `model` is pinned exactly with no fallback.
+- `attachment_ids` still require `idempotencyKey` (and the `chat_attachments` feature). On a deliberate retry send the same `model`, `strict_model` and native policy with the same key. A changed or omitted `model` answers `409 idempotency_conflict`. The SDK never resends or falls back to another model automatically.
+- Model errors keep their HTTP status and `code` on `EnvaiError`: `422` `invalid_model`, `unknown_model`, `model_unavailable` and `model_incompatible`, and `503` `model_catalog_unavailable`. There is no `model_not_selectable` error.
+- `agent.started` data `model` and the agent envelope `model` report the selected logical id. On `agent.done`, `requested_model` (the logical request) and `model` (the provider-reported model) are separate fields and can differ. Their existing native-task gating is unchanged.
+- Server restart or eviction loses the resident buffer with no paid rerun; completion terminal snapshot metadata is available only when recorded. Reconcile with the original key and policy.
+- Only chat messages select a model. Jobs, delegation, deliveries and wiki endpoints have no model selection.
 
 ## Signed client tools
 
@@ -165,9 +197,9 @@ There is no automatic tool-output resubmission. A dropped response, `409 tool_al
 
 Provide `fetch` for a custom transport or mock. The normal request timeout defaults to 30 seconds. JSON bodies are decoded within this timeout; raw binary/SSE bodies remain caller-managed streams, so use a signal while reading. A custom Fetch must honor signals and `redirect: 'manual'`.
 
-Only GETs retry automatically: transient transport failures and 429/502/503/504, with exponential jitter and bounded `Retry-After` handling. Defaults are two retries, 250 ms base delay, 30 s maximum delay. POST/PUT/DELETE are never retried. Redirects are refused rather than forwarding bearer credentials or signed query values to another endpoint.
+Only GETs retry automatically: transient transport failures and 429/502/503/504, with exponential jitter and bounded `Retry-After` handling. Defaults are two retries, 250 ms base delay, 30 s maximum delay. POST/PUT/PATCH/DELETE are never retried. Redirects are refused rather than forwarding bearer credentials or signed query values to another endpoint.
 
-`EnvaiError` includes `httpStatus`, `type`, `code`, `details`, and `requestId`. Subclasses include authentication, access-denied, not-found, conflict, validation, rate-limit, provider, file, and server errors. Branch on `code`, never human message text. Transport errors do not retain request URLs, bodies, or credentials.
+`EnvaiError` includes `httpStatus`, `type`, `code`, `details`, and `requestId`. Subclasses include authentication, payment-required (HTTP 402), access-denied, not-found, conflict, validation, rate-limit, provider, file, and server errors. Branch on `code`, never human message text. Transport errors do not retain request URLs, bodies, or credentials.
 
 `onObservation` receives request durations/status, retry/reconnect events, stream lifecycle, ATP IDs/type/sequence, and tool lifecycle. It excludes credentials, arguments, output, text, and URLs. Observer exceptions cannot change runtime behavior. Standard trace headers can be supplied in per-call headers.
 
@@ -179,22 +211,20 @@ The bundled contracts describe API 3.0.0 and negotiated ATP v3. Exact source has
 
 - Replay is best-effort, with no durable epoch or cursor-expired response, and sequences can reset after eviction/restart. A reused cursor can silently receive an incomplete tail or only pings. Gap checks cannot detect every reset. Resume is best-effort **within the same resident runtime**; require an application reconciliation policy after known eviction/restart.
 - Replay and live subscription are not atomic. Waiting for the first post-subscription ping reduces the new-turn attach race; it cannot restore already lost events or guarantee every interleaving. Subscriber overflow can silently drop events; observable upward gaps trigger recovery.
-- Capabilities is positive feature discovery, not a parser allowlist. All 29 declared event types remain valid even when discovery lists fewer events.
+- Capabilities is positive feature discovery, not a parser allowlist. All 39 declared event types remain valid even when discovery lists fewer events.
 - A successful `steer` acknowledgement does not guarantee changed execution.
 - Approval resolution currently responds with HTTP 409 and is unavailable as a completed workflow. The primitive preserves that error.
 - Context restore is best-effort. A restore acknowledgement does not guarantee complete or durable history. Reported chat usage can reset and is not a durable billing record.
 - Fork requires a separately created empty destination chat in the same owner/workspace, with both chats idle. Restore returns `turn_id: null` and does not start a turn.
 - Completion pagination exposes a typed positive `page` selector and a bounded iterator; empty tool output lacks a schema minimum although the gateway rejects it.
 
-
 ## Development and provenance
 
-`npm run generate` deterministically regenerates 123 HTTP models, request/response types, operation primitives, and 36 event payload types from both pinned contracts. SSE, cryptography, tools, and helpers remain handwritten. `npm run check:generated` fails on drift without rewriting files. The original v2 snapshots retain provenance in `testdata/contracts/provenance.json`; current shared v3/wiki sources are identified in `contracts/manifest.json`. `sources` preserves their original commit/path, byte count, SHA-256 and Git blob SHA. `generated_fixtures` separately identifies SDK-authored conformance cases and generated OpenAPI JSON. Public guides are SDK documentation, not copied contract sources. Tests verify every retained source and fixture hash.
+`npm run generate` deterministically regenerates 242 HTTP models, request/response types, operation primitives, and 39 event payload types from both pinned contracts. SSE, cryptography, tools, and helpers remain handwritten. `npm run check:generated` fails on drift without rewriting files. The original v2 snapshots retain provenance in `testdata/contracts/provenance.json`; current shared v3/wiki sources are identified in `contracts/manifest.json`. `sources` preserves their original commit/path, byte count, SHA-256 and Git blob SHA. `generated_fixtures` separately identifies SDK-authored conformance cases and generated OpenAPI JSON. Public guides are SDK documentation, not copied contract sources. Tests verify every retained source and fixture hash.
 
 Tests make no live Envai requests and need no credentials. CI typechecks the runtime and examples, verifies generation, tests the reviewed SDK surface plus schema/SSE/signature/state-machine conformance, enforces at least 95% line/function and 90% branch coverage, and smoke-tests the packed archive on Node 22 and 24. Signature fixtures use public RFC 8032 test-key material only, never account credentials or production signing keys.
 
 MIT, copyright 2026 DigItalyGo. Existing license text is preserved.
-
 
 ## Wiki V1 and contract 3
 
@@ -212,7 +242,7 @@ Set `strictValidation: true` on `EnvaiClient` to validate every canonical HTTP o
 
 ### Independent jobs and finite choices
 
-The native surface is pinned to Envai commit `964c11fe72887329e8d06c2afb483442d643b290`. Native extensions remain opt-in and default to disabled. Capability discovery is read-only; admission requires `independent_jobs`, choice classification requires `finite_choice_classification`, and delivery without an origin requires `originless_deliveries`. Explicit `strict_model: true` also requires `strict_model`.
+The native surface is pinned to Envai commit `f970714c0a358ff94b14f15eabde197c55861e74`, the same backend commit as the six bundled shared contracts. Native extensions remain opt-in and default to disabled. Capability discovery is read-only; admission requires `independent_jobs`, choice classification requires `finite_choice_classification`, and delivery without an origin requires `originless_deliveries`. Explicit `strict_model: true` also requires `strict_model`.
 
 Independent jobs start without a parent turn. Their receipt identifies the initial coordinator; final task `output` and `result_turn_id` identify the completed job. Task snapshots keep the required `origin_turn_id` key with the empty string for independent jobs. Missing origin is invalid. Keep the execution chat’s native SSE subscription and client-tool runner alive while waiting; polling helpers do not execute tools.
 
@@ -232,8 +262,22 @@ const selected = await client.chats.classifyChoice({ chat_id: chatId, body: {
 
 ## Project tenancy cutover
 
-This SDK embeds the complete 146-operation server OpenAPI snapshot but generates only the explicit, reviewed 78-operation SDK allowlist in `scripts/sdk-operations.json`. It does not expose new account, company billing, internal service, or human-session APIs. The three API-key management methods remain discoverable for compatibility but always throw `CompatibilityError` before HTTP, including without a configured bearer key. Use the human console to manage keys.
+This SDK embeds the complete 146-operation server OpenAPI snapshot but generates only the explicit, reviewed 92-operation SDK allowlist in `scripts/sdk-operations.json` (89 callable operations plus 3 API-key compatibility stubs). It does not expose human administration, company financial, internal service, or human-session APIs. The three API-key management methods remain discoverable for compatibility but always throw `CompatibilityError` before HTTP, including without a configured bearer key. Use the human console to manage keys.
 
 Use a **project API key**. `Workspace`, `Chat`, `Agent`, and `Team` now expose `project_id` and nullable `created_by_user_id`, not a user owner. `Completion` includes immutable `project_id` and `api_key_id`, while `user_id` is nullable audit provenance. Pre-tenancy v3 payloads are intentionally rejected by current strict validation; frozen v2 historical reads retain their older schema.
 
 Tools are now shared within the key's **project**, not across the creator's projects. Prefer `createProjectTool`, `listProjectTools`, `getProjectTool`, `updateProjectTool`, and `deleteProjectTool`. Deprecated `*UserTool*` method/type aliases remain source-compatible and call the same `/tools` routes, with the new project scope. `client.tools` and definition synchronization use the project-scoped endpoints. No session authentication or CSRF bypass is added.
+
+## Project resources
+
+Unreleased source additions add 14 project-key operations: cron (4: list, get, update, delete), project skills (5: list, create, get, update, delete), project usage and logs (2), and chat rename, chat deletion and workspace deletion (3). They use `client.chatCrons`, `client.projectSkills`, `client.projectReports` and the existing `client.chats` and `client.workspaces` groups, and require contract 3 with a project API key.
+
+```ts
+const usage = await client.projectUsage(projectId, { from: "2026-10-01", to: "2026-10-10" });
+for await (const entry of client.iterateProjectLogs(projectId, { types: ["turn.completed"] }, { startPage: 1, maxPages: 20, signal })) {
+  console.log(entry.type);
+}
+const analytics = await client.projectAnalytics(projectId, { from: "2026-10-01", to: "2026-10-10" });
+```
+
+Key behavior: repeated filters are sent as `types[]`, `workspace_ids[]` and `api_key_ids[]`; pagination is local and ignores response links; usage amounts are exact decimal strings and unknown values stay `null`; workspace and chat deletion return `200` with pending cleanup intents, not a physical purge; cron and skill deletion return `204`. Mutations are never retried, and 409, 402 (`PaymentRequiredError`) and 503 (`ServerError`, including provider configuration errors) reach the caller as typed errors. Human administration and company financial operations are excluded and the API-key methods remain stubs. See the [API reference](docs/api-reference.md#project-resources) for signatures and validation.
