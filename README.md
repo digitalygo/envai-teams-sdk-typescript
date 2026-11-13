@@ -117,6 +117,36 @@ The parser supports fragmented UTF-8, BOM, CR/LF/CRLF, multi-line data, comments
 
 V3 duplicate sequence numbers are suppressed; finite legacy replay instead rejects duplicate or backwards sequences atomically. An observable live gap triggers one replay recovery attempt from the delivered cursor; a repeated gap raises `ReplayGapError`. Stream retries are bounded (five reconnects by default), jittered, cancellable, and observable. Fatal protocol/authentication errors stop immediately. The default idle timeout is 45 seconds; connection timeout is 15 seconds; `maxDurationMs` is optional. Low-level `chats.cancel` asks the server to cancel a turn; only `turn.cancelled` confirms completion. Local `AbortSignal` cancellation closes this client's work and does **not** implicitly cancel a server turn.
 
+## Per-turn model selection
+
+Unreleased source, verified with offline tests and fake providers only. The contracts are fixed at `digitalygo/envai-teams` commit `7f4085dbfdd3f208b82716119cff1860fbd502bb`; that is a source pin, not a claim about any deployed server.
+
+Set `model` in the message body to pin the root orchestrator model for that one turn. `sendChatMessage`, `sendAndStream` and `sendAndWait` all take it:
+
+```ts
+const models = await client.listModels();
+const model = models.data.find((entry) => entry.type === 'llm' && entry.selectable)?.id;
+if (!model) throw new Error('No model reported as selectable');
+
+const result = await client.sendAndWait(
+  chat.id,
+  { message: 'Summarize the project.', model },
+  { idempotencyKey: 'summary-1' },
+);
+const next = await client.sendAndWait(chat.id, { message: 'And the risks?' });
+```
+
+- Use an exact, case-sensitive `id` copied from an `llm` entry of `GET /models`. The SDK does not trim, fold case, translate aliases or prefetch the catalog. It has no client-side model list and no allowlist.
+- `selectable` is guidance and `selectable: false` is retained as received. It is not a permission gate: the SDK sends the model anyway and the server decides.
+- The model applies to that turn's root only. It never changes team, agent, chat or default configuration, and it is not carried to later calls. Omitting `model` returns to the normal configured cascade.
+- Omit the property for no selection. A raw `null`, a non-string, an empty or a padded value is never turned into omission or a fallback: it is sent as written and the server answers `422 invalid_model`, or with `strictValidation: true` the SDK throws `ProtocolError` before message submission (no message POST is sent; read requests such as opening the live stream can precede validation).
+- An explicit `model` needs no native tasks or `strict_model`. If you also set `strict_model: true`, its existing gates (`nativeTasks` and the advertised `strict_model` feature) apply (`strict_model: false` is not gated). Whether `strict_model` is omitted, `false` or `true`, an explicit `model` is pinned exactly with no fallback.
+- `attachment_ids` still require `idempotencyKey` (and the `chat_attachments` feature). On a deliberate retry send the same `model`, `strict_model` and native policy with the same key. A changed or omitted `model` answers `409 idempotency_conflict`. The SDK never resends or falls back to another model automatically.
+- Model errors keep their HTTP status and `code` on `EnvaiError`: `422` `invalid_model`, `unknown_model`, `model_unavailable` and `model_incompatible`, and `503` `model_catalog_unavailable`. There is no `model_not_selectable` error.
+- `agent.started` data `model` and the agent envelope `model` report the selected logical id. On `agent.done`, `requested_model` (the logical request) and `model` (the provider-reported model) are separate fields and can differ. Their existing native-task gating is unchanged.
+- Server restart or eviction loses the resident buffer with no paid rerun; completion terminal snapshot metadata is available only when recorded. Reconcile with the original key and policy.
+- Only chat messages select a model. Jobs, delegation, deliveries and wiki endpoints have no model selection.
+
 ## Signed client tools
 
 Nothing is executed unless the application explicitly installs a local handler and supplies a state store. No filesystem tools, shell handlers, account discovery, or automatic registry synchronization are installed.
@@ -212,7 +242,7 @@ Set `strictValidation: true` on `EnvaiClient` to validate every canonical HTTP o
 
 ### Independent jobs and finite choices
 
-The native surface is pinned to Envai commit `ba021aa61e30e379880f809d45f90e5d3564d43e`, the same backend commit as the six bundled shared contracts. Native extensions remain opt-in and default to disabled. Capability discovery is read-only; admission requires `independent_jobs`, choice classification requires `finite_choice_classification`, and delivery without an origin requires `originless_deliveries`. Explicit `strict_model: true` also requires `strict_model`.
+The native surface is pinned to Envai commit `7f4085dbfdd3f208b82716119cff1860fbd502bb`, the same backend commit as the six bundled shared contracts. Native extensions remain opt-in and default to disabled. Capability discovery is read-only; admission requires `independent_jobs`, choice classification requires `finite_choice_classification`, and delivery without an origin requires `originless_deliveries`. Explicit `strict_model: true` also requires `strict_model`.
 
 Independent jobs start without a parent turn. Their receipt identifies the initial coordinator; final task `output` and `result_turn_id` identify the completed job. Task snapshots keep the required `origin_turn_id` key with the empty string for independent jobs. Missing origin is invalid. Keep the execution chat’s native SSE subscription and client-tool runner alive while waiting; polling helpers do not execute tools.
 

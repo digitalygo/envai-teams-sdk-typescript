@@ -1,7 +1,10 @@
 ---
 status: completed
 created_at: 2026-11-12
+updated_at: 2026-11-13
 files_edited:
+  - contracts/events.json
+  - tests/per-turn-model.test.mjs
   - README.md
   - contracts/manifest.json
   - contracts/openapi.json
@@ -29,7 +32,9 @@ files_edited:
 rationale:
   - Expose the existing project-key API surface without adding human-session or financial-management rights.
   - Preserve typed reports, safe pagination, exact amounts and conservative mutation handling.
+  - Carry an exact model override for one turn without changing defaults or retry policy.
 supporting_docs:
+  - https://github.com/digitalygo/envai-teams/tree/7f4085dbfdd3f208b82716119cff1860fbd502bb
   - ../../../AGENTS.md
   - ../../../docs/api-reference.md
   - ../../../docs/api-inventory.md
@@ -125,3 +130,46 @@ The backend advanced independently during verification, but its contracts,
 request/resource definitions and routes remained unchanged relative to the pin.
 Shared temporary test databases were isolated by SDK; their containers and
 private connection files are removed at task closure.
+
+## Update: 2026-11-13 per-turn model selection
+
+### Summary and reasoning
+
+Starting from SDK `c0e0bd9` on `feature/user-company-projects`, refreshed the
+current contracts to backend `7f4085dbfdd3f208b82716119cff1860fbd502bb`. The
+backend pull already included the merge of `alpha`; its push was up to date
+and PR 58 pointed to that revision. GitHub metadata now resolves the backend
+repository to `digitalygo/envai-teams`; earlier names above remain historical.
+
+Generated `ChatMessageRequest.model` and catalog `selectable`. Existing
+low-level, stream and wait helpers already forward the body unchanged. An
+explicit model stays request-local, is never normalized, and adds no native
+capability requirement, catalog prefetch, model fallback or mutation retry.
+Strict validation rejects invalid model values locally; ordinary mode retains
+the raw value and surfaces the server error. Current documentation explains
+this distinction, guidance-only catalog flags and idempotency policy.
+
+### Impact and verification
+
+No dependency, CI, version, endpoint or backend source change was introduced.
+All six contract snapshots match the pinned backend bytes; historical captures
+and frozen v2 remain unchanged. No release, deployment or live provider test
+is implied.
+
+Independent `npm run check` passed 474 tests with no skips on Node 24.20.0.
+Coverage was 99.58% lines, 97.85% branches and 98.40% functions. Package import
+verification passed. SDK runtime executable delta coverage is N/A because the
+SDK changes are generated type declarations; the changed generator statement
+was executed by the deterministic generation checks. New tests cover helper
+forwarding, omitted versus explicit values, strict policy, attachments,
+idempotency keys, model errors without resending and catalog/event fields.
+
+Quality judgment by the fallback reviewer and security review both returned
+PASS for non-trace snapshot
+`2800e1d6e37646bbdc4f4ff264c54c9febd70e12c5943615344a5e999d615c33`.
+The primary quality reviewer returned no verdict; the fallback reviewed the
+complete delta. Local Node 22 and actionlint were not available for this run;
+no workflow changed. Logs remain in
+`/tmp/envai-model-sdk-verify/leader-typescript.log`. Task database containers,
+their volumes, private connection files and the temporary wheel environment
+were removed after verification; unrelated resources were preserved.
