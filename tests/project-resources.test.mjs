@@ -597,14 +597,14 @@ test('four current events are typed, billing events are non-terminal with null t
 test('six refreshed contracts carry exact backend hashes, canonical provenance and the new provider error', () => {
   const expected = {
     'smidja-native.json': ['035065640fa4946a2e54297b1a22c69ea736827d38765b0cdaa80a28c3058f8b', '6fd7074e23381d8875fc6e0b3aef4df99ab6297d'],
-    'openapi.yaml': ['4e153677561938241d42335c4ecbbfd8c0d9de0fbcbd59b75aa10dfbb17c0691', 'fa965e896047f94084ddc7160a5a3cbf9633b986'],
+    'openapi.yaml': ['13a177fd31dc61e108e61c5209b1395e57735ca6049f3737e33e3be9eb3109e0', '388995332129814273560703eb16a36cb51e4d73'],
     'events.json': ['7522d63756d624e7ebc7a2a5787f8ab2d6fc0099c5c70e56e65cf08e93daae85', 'e4713436407e2c27cdecb8d49dd3f815cc2e5870'],
     'events-v2.json': ['88d41835f88c0cc4ad071b06ed4623882c6b64144baf312c4a095504c98cd7d6', '02b13b23cd06eacd81059d1ed99e0027769d75e4'],
     'wiki.json': ['e360060a42c1d69a6cd15de3ea33745567d23166785efcb08f161c7acb38d30c', '3d495bbe3b4cf53af3cab29d86d3a032a7fa8b8c'],
     'terminal-snapshot.json': ['c132b27031595c94a8b05eaf008545ccc3ac21d4dd170dd800c5e15b7f93e9bf', '77d885bda661800972ed56837e69a57ab613da82'],
   };
   assert.equal(manifest.repository, 'digitalygo/envai-teams');
-  assert.equal(manifest.commit, '7f4085dbfdd3f208b82716119cff1860fbd502bb');
+  assert.equal(manifest.commit, 'f970714c0a358ff94b14f15eabde197c55861e74');
   assert.equal(manifest.operationCount, 92);
   assert.equal(manifest.serverOperationCount, 146);
   for (const [name, [hash, blob]] of Object.entries(expected)) {

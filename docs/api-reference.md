@@ -62,7 +62,7 @@ Tools are now shared within the key's **project**, not across the creator's proj
 
 ## Project resources
 
-Source additions on `feature/user-company-projects` are unreleased. The `1.0.0-alpha.5` manifest is the baseline, not a release containing them. The contracts are pinned to backend commit `7f4085dbfdd3f208b82716119cff1860fbd502bb` across six shared schema files; see `contracts/manifest.json`. They add 14 project-key operations, all callable with a project API key under contract 3 (contract 2 raises `CompatibilityError` before HTTP):
+Source additions on `feature/user-company-projects` are unreleased. The `1.0.0-alpha.5` manifest is the baseline, not a release containing them. The contracts are pinned to backend commit `f970714c0a358ff94b14f15eabde197c55861e74` across six shared schema files; see `contracts/manifest.json`. They add 14 project-key operations, all callable with a project API key under contract 3 (contract 2 raises `CompatibilityError` before HTTP):
 
 | Area | Operations | Convenience group |
 | --- | --- | --- |

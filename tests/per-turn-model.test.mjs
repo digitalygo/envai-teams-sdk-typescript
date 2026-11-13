@@ -42,6 +42,39 @@ test('raw invalid model shapes are not normalized and strict validation rejects 
  }
 });
 
+test('all Go whitespace boundaries are forwarded by default and rejected before strict message posts', async () => {
+ const whitespace = [0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0x85, 0xa0, 0x1680, ...Array.from({ length: 11 }, (_, i) => 0x2000 + i), 0x2028, 0x2029, 0x202f, 0x205f, 0x3000];
+ for (const padding of [...whitespace.map(code => String.fromCodePoint(code)), '\r\n']) for (const value of [`${padding}模型`, `模型${padding}`]) {
+  const posts = [];
+  const fetch = async (url, init) => {
+   if (url.endsWith('/capabilities')) return json(capabilities);
+   posts.push({ url, body: JSON.parse(init.body) });
+   return json({ error: { type: 'validation_error', code: 'invalid_model', message: 'invalid' } }, 422);
+  };
+  await assert.rejects(client(fetch).sendChatMessage({ chat_id: chatId, body: { message: 'hi', model: value } }), e => e instanceof EnvaiError && e.code === 'invalid_model');
+  assert.equal(posts.length, 1);
+  assert.deepEqual(posts[0].body, { message: 'hi', model: value });
+  assert.ok(posts[0].url.endsWith(`/chats/${chatId}/messages`));
+  posts.length = 0;
+  await assert.rejects(client(fetch, { strictValidation: true }).sendChatMessage({ chat_id: chatId, body: { message: 'hi', model: value } }), ProtocolError);
+  assert.equal(posts.length, 0, `strict mode posted model ${JSON.stringify(value)}`);
+ }
+});
+
+test('strict validation preserves valid Unicode and non-boundary whitespace without model stickiness', async () => {
+ const bodies = [];
+ const c = client(async (url, init) => {
+  if (url.endsWith('/capabilities')) return json(capabilities);
+  bodies.push(JSON.parse(init.body));
+  return json(accepted, 202);
+ }, { strictValidation: true });
+ for (const value of ['UnicodeVendor/模型', 'Vendor/Case', 'x \ty', 'x\ny', 'x\u00a0y', '\ufeffx\ufeff', ...[0x1c, 0x1d, 0x1e, 0x1f].map(code => `${String.fromCodePoint(code)}x${String.fromCodePoint(code)}`)]) {
+  await c.sendChatMessage({ chat_id: chatId, body: { message: 'hi', model: value } });
+ }
+ await c.sendChatMessage({ chat_id: chatId, body: { message: 'omitted' } });
+ assert.deepEqual(bodies, ['UnicodeVendor/模型', 'Vendor/Case', 'x \ty', 'x\ny', 'x\u00a0y', '\ufeffx\ufeff', ...[0x1c, 0x1d, 0x1e, 0x1f].map(code => `${String.fromCodePoint(code)}x${String.fromCodePoint(code)}`)].map(model => ({ message: 'hi', model })).concat({ message: 'omitted' }));
+});
+
 test('strict_model remains independently gated alongside the model', async () => {
  for (const value of [undefined, false, true]) {
   const seen = [];
